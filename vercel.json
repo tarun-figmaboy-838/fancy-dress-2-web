@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "installCommand": null,
+  "rewrites": [
+    { "source": "/", "destination": "/fancy-dress-2-web/index.html" },
+    { "source": "/(.*)", "destination": "/fancy-dress-2-web/$1" }
+  ]
+}
