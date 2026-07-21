@@ -858,11 +858,15 @@
       if (self.currentSelected !== 0) return;
       if (c.bookGlow) E.setActive(c.bookGlow, false);
       if (c.bagGlow) E.setActive(c.bagGlow, false);
-      var target = null, hasGlow = false;
-      if (!self.bookCompleted) { target = c.bookButtonTarget || c.bookButton; if (c.bookGlow) { E.setActive(c.bookGlow, true); hasGlow = true; } }
-      else if (!self.bagCompleted) { target = c.bagButtonTarget || c.bagButton; if (c.bagGlow) { E.setActive(c.bagGlow, true); hasGlow = true; } }
-      // the real "glow" sprite IS the hint; only fall back to a synthetic ring if the scene has no glow node
-      if (target && !hasGlow) self._showRing("selection", target);
+      // Highlight the card the learner should tap with BOTH cues, so the selection stage
+      // matches every other idle control (+/−/Check/final answer all nudge with a hand):
+      //   • the glow sprite highlights the card, and
+      //   • the animated hand points at it (anchored on the card itself).
+      var glowNode = null, handTarget = null;
+      if (!self.bookCompleted) { glowNode = c.bookGlow; handTarget = c.bookButton; }
+      else if (!self.bagCompleted) { glowNode = c.bagGlow; handTarget = c.bagButton; }
+      if (glowNode) E.setActive(glowNode, true);
+      if (handTarget) self._showRing("selection", handTarget);
     }, (c.selectionHintDelay || 12) * 1000);
   };
   TP.hideSelectionHint = function () {

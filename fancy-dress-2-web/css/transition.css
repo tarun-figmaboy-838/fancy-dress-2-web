@@ -12,8 +12,9 @@
 
    All original hooks your engine toggles are intact:
    .lt-overlay/.lt-in/.lt-out, .lt-card, .lt-scale, .lt-beam, .lt-pan-l, .lt-pan-r,
-   .lt-star, .lt-text/.lt-sub/.lt-typing. New spectacle is additive (pseudo-elements),
-   so this is a drop-in replacement — no markup changes required. */
+   .lt-star, .lt-text/.lt-sub/.lt-typing. The "magic wave" motif ported from the new
+   transition design (see design/transition-scenes.jsx) adds one decorative element,
+   .lt-wave (built in level-transition.js buildOverlay), plus a cool water palette. */
 
 :root {
   --lt-speed: var(--god-animation-speed, 1);
@@ -25,12 +26,13 @@
   --lt-ink2:   #B4560E;
   --lt-gold:   #FFC93C;
 
-  /* bright confetti pops — warm-biased so they sit ON the brown, not against it */
-  --lt-c1: #FF6B5A;  /* coral   */
-  --lt-c2: #FFC93C;  /* gold    */
-  --lt-c3: #34C6C6;  /* teal    */
-  --lt-c4: #4CC36A;  /* green   */
-  --lt-c5: #FF7BB5;  /* magenta */
+  /* magic-wave pops — cool water/teal biased to match the new "magic wave" transition
+     (the balance game's own water motif), with one warm gold accent for contrast */
+  --lt-c1: #5BC4C4;  /* teal      */
+  --lt-c2: #8CD7FF;  /* sky       */
+  --lt-c3: #3B70C5;  /* blue      */
+  --lt-c4: #BEEBFF;  /* pale aqua */
+  --lt-c5: #FFC93C;  /* gold      */
 
   /* the single moment everything syncs to: when the beam hits level */
   --lt-slam: calc(0.78s / var(--lt-speed));
@@ -74,7 +76,7 @@
   opacity: 0;
   background:
     radial-gradient(circle at 50% 42%,
-      rgba(255, 255, 255, 0.95) 0%, rgba(255, 245, 210, 0.6) 30%, rgba(255, 255, 255, 0) 62%);
+      rgba(234, 246, 255, 0.95) 0%, rgba(140, 215, 255, 0.55) 30%, rgba(255, 255, 255, 0) 62%);
   animation: lt-flash calc(.42s / var(--lt-speed)) ease-out var(--lt-slam) forwards;
 }
 @keyframes lt-flash {
@@ -112,8 +114,8 @@
   width: 90px; height: 90px;
   margin: -45px 0 0 -45px;
   border-radius: 50%;
-  border: 8px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 0 6px rgba(255, 201, 60, 0.5);
+  border: 8px solid rgba(190, 235, 255, 0.95);
+  box-shadow: 0 0 0 6px rgba(91, 196, 196, 0.55);
   opacity: 0; transform: scale(0);
   pointer-events: none; z-index: 1;
   animation: lt-shock calc(.55s / var(--lt-speed)) cubic-bezier(.15, .7, .3, 1) var(--lt-slam) forwards;
@@ -156,6 +158,31 @@
   100% { opacity: 0;  transform: scale(1.9); }
 }
 
+/* MAGIC WAVE — the new transition's signature beat: concentric water rings that expand
+   out of the fulcrum on the slam, in the balance game's water palette. Pure CSS (box-shadow
+   rings scaled by transform), one decorative element, removed with the overlay. */
+.lt-wave {
+  position: absolute;
+  top: 150px; left: 50%;                 /* ~fulcrum of the 460×300 scale graphic */
+  width: 120px; height: 120px; margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  z-index: 1; pointer-events: none;
+  opacity: 0; transform: scale(.15);
+  background: radial-gradient(circle,
+    rgba(190, 235, 255, .95) 0%, rgba(91, 196, 196, .55) 42%, rgba(59, 112, 197, 0) 70%);
+  box-shadow:
+    0 0 0 8px   rgba(140, 215, 255, .50),
+    0 0 0 22px  rgba(91, 196, 196, .34),
+    0 0 0 40px  rgba(59, 112, 197, .20),
+    0 0 70px 12px rgba(91, 196, 196, .55);
+  animation: lt-wave calc(.95s / var(--lt-speed)) cubic-bezier(.15, .7, .3, 1) var(--lt-slam) forwards;
+}
+@keyframes lt-wave {
+  0%   { opacity: .9;  transform: scale(.15); }
+  60%  { opacity: .55; }
+  100% { opacity: 0;   transform: scale(6.5); }
+}
+
 /* ---- balance scale graphic ---- */
 .lt-scale { width: 460px; height: 300px; overflow: visible; position: relative; z-index: 3; }
 
@@ -192,7 +219,7 @@
 .lt-star {
   transform-box: fill-box; transform-origin: 50% 50%;
   opacity: 0; transform: scale(0) rotate(-40deg);
-  filter: drop-shadow(0 0 10px rgba(255, 201, 60, .9));
+  filter: drop-shadow(0 0 10px rgba(255, 201, 60, .9)) drop-shadow(0 0 22px rgba(91, 196, 196, .6));
   animation: lt-star calc(.5s / var(--lt-speed)) cubic-bezier(.2, 1.7, .3, 1) forwards;
   animation-delay: calc(.9s / var(--lt-speed));
 }
@@ -228,7 +255,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .lt-overlay::before, .lt-overlay::after,
-  .lt-card, .lt-card::before, .lt-card::after,
+  .lt-card, .lt-card::before, .lt-card::after, .lt-wave,
   .lt-beam, .lt-pan-l, .lt-pan-r, .lt-star, .lt-text {
     animation-duration: .01s !important;
     animation-delay: 0s !important;

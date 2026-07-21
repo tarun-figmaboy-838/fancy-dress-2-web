@@ -1,0 +1,25 @@
+# Dependencies (none are committed — this is a no-build static site)
+node_modules/
+package-lock.json
+yarn.lock
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs & temp
+*.log
+*.tmp
+scratchpad/
+tmp/
+
+# Local env / secrets
+.env
+.env.local
+.env.*.local

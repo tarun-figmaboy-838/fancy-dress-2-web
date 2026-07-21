@@ -74,29 +74,31 @@
     return (v > 0 && isFinite(v)) ? v : 1;
   }
 
+  // Balance scale re-tinted to the new transition's blue/teal palette (was warm brown/gold).
+  // The reward star stays gold so it still pops against the cool scale.
   var SCALE_SVG =
     '<svg class="lt-scale" viewBox="0 0 460 300" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
-    '<rect x="150" y="250" width="160" height="26" rx="10" fill="#8A410A"/>' +
-    '<rect x="222" y="70" width="16" height="185" rx="8" fill="#A85B12"/>' +
-    '<circle cx="230" cy="72" r="14" fill="#F6A623" stroke="#8A410A" stroke-width="4"/>' +
+    '<rect x="150" y="250" width="160" height="26" rx="10" fill="#33327a"/>' +
+    '<rect x="222" y="70" width="16" height="185" rx="8" fill="#4746A0"/>' +
+    '<circle cx="230" cy="72" r="14" fill="#5BC4C4" stroke="#29285c" stroke-width="4"/>' +
     '<g class="lt-beam">' +
-    '<rect x="60" y="64" width="340" height="16" rx="8" fill="#B4560E"/>' +
-    '<circle cx="70" cy="72" r="7" fill="#8A410A"/><circle cx="390" cy="72" r="7" fill="#8A410A"/>' +
+    '<rect x="60" y="64" width="340" height="16" rx="8" fill="#4746A0"/>' +
+    '<circle cx="70" cy="72" r="7" fill="#29285c"/><circle cx="390" cy="72" r="7" fill="#29285c"/>' +
     '</g>' +
     '<g class="lt-pan-l">' +
-    '<line x1="70" y1="72" x2="40" y2="150" stroke="#8A410A" stroke-width="4"/>' +
-    '<line x1="70" y1="72" x2="100" y2="150" stroke="#8A410A" stroke-width="4"/>' +
-    '<path d="M28 150 H112 L96 188 H44 Z" fill="#F6A623" stroke="#8A410A" stroke-width="4" stroke-linejoin="round"/>' +
-    '<rect x="52" y="120" width="36" height="34" rx="6" fill="#F2C14E" stroke="#8A410A" stroke-width="3"/>' +
+    '<line x1="70" y1="72" x2="40" y2="150" stroke="#33327a" stroke-width="4"/>' +
+    '<line x1="70" y1="72" x2="100" y2="150" stroke="#33327a" stroke-width="4"/>' +
+    '<path d="M28 150 H112 L96 188 H44 Z" fill="#3B70C5" stroke="#29285c" stroke-width="4" stroke-linejoin="round"/>' +
+    '<rect x="52" y="120" width="36" height="34" rx="6" fill="#8CD7FF" stroke="#29285c" stroke-width="3"/>' +
     '</g>' +
     '<g class="lt-pan-r">' +
-    '<line x1="390" y1="72" x2="360" y2="150" stroke="#8A410A" stroke-width="4"/>' +
-    '<line x1="390" y1="72" x2="420" y2="150" stroke="#8A410A" stroke-width="4"/>' +
-    '<path d="M348 150 H432 L416 188 H364 Z" fill="#F6A623" stroke="#8A410A" stroke-width="4" stroke-linejoin="round"/>' +
-    '<rect x="372" y="120" width="36" height="34" rx="6" fill="#F2C14E" stroke="#8A410A" stroke-width="3"/>' +
+    '<line x1="390" y1="72" x2="360" y2="150" stroke="#33327a" stroke-width="4"/>' +
+    '<line x1="390" y1="72" x2="420" y2="150" stroke="#33327a" stroke-width="4"/>' +
+    '<path d="M348 150 H432 L416 188 H364 Z" fill="#3B70C5" stroke="#29285c" stroke-width="4" stroke-linejoin="round"/>' +
+    '<rect x="372" y="120" width="36" height="34" rx="6" fill="#8CD7FF" stroke="#29285c" stroke-width="3"/>' +
     '</g>' +
     '<g class="lt-star"><path d="M230 8 l14 40 42 2 -33 26 12 41 -35-24 -35 24 12-41 -33-26 42-2 z" ' +
-    'fill="#FFE47A" stroke="#8A410A" stroke-width="4" stroke-linejoin="round"/></g>' +
+    'fill="#FFE47A" stroke="#B8860B" stroke-width="4" stroke-linejoin="round"/></g>' +
     '</svg>';
 
   function buildOverlay() {
@@ -105,6 +107,12 @@
     var card = document.createElement("div");
     card.className = "lt-card";
     card.innerHTML = SCALE_SVG;
+    // magic-wave layer (ported from the new transition design) — expands out of the
+    // fulcrum on the slam. Decorative; sits behind the scale/text; removed with the overlay.
+    var wave = document.createElement("div");
+    wave.className = "lt-wave";
+    wave.setAttribute("aria-hidden", "true");
+    card.insertBefore(wave, card.firstChild);
     var text = document.createElement("div");
     text.className = "lt-text";
     card.appendChild(text);
