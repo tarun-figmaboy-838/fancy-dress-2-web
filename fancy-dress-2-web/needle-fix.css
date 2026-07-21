@@ -1,0 +1,17 @@
+#stage [data-name="needle"] {
+  position: absolute !important;
+
+  /* Automatically centers an 87px needle.
+     For a 251px parent, this becomes left: 82px. */
+  left: calc(50% - 43.5px) !important;
+  top: 100px !important;
+
+  width: 87px !important;
+  height: 97px !important;
+
+  /* Correct Unity pivot */
+  transform-origin: 50% 50% !important;
+
+  will-change: transform;
+  pointer-events: none;
+}
