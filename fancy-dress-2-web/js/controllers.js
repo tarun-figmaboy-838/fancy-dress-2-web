@@ -578,6 +578,15 @@
     if (c.gameplayPanel) E.setActive(c.gameplayPanel, false);
     E.setActive(c.itemmain, false);
     this.game.resetGameplay();
+    // Lock BOTH selection cards for the whole return sequence (pass-mark tween + the
+    // "Select the other balance" narration). Without this the cards stay tappable while
+    // the line is still speaking, so a fast tap starts the next item and then the
+    // `currentSelected = 0` reset at the end of this function wipes that selection — which
+    // left completion untracked and made this "select the other balance" stage repeat and
+    // stick. Re-enabled only after the narration (parity with startSelectionFlow).
+    E.setInteractable(c.bookButton, false);
+    E.setInteractable(c.bagButton, false);
+    this.hideSelectionHint();
     if (this.currentSelected === this.SelectedType.Book) {
       this.bookCompleted = true; this.firstGameplayCompleted = true;
       E.setInteractable(c.bookButton, false);
@@ -916,7 +925,7 @@
     CFG.levels.forEach(function (L) {
       var tut = new Tut(L.tut);
       var game = new WeightMeasuringGame(L.game, tut);
-      game.cubePrefab = { size: [200, 218] }; // weight-block size tuned via the live editor
+      game.cubePrefab = { size: [170, 186] }; // weight-block size (shrunk ~15% so a full pan of blocks stays inside the bowl, not spilling over the rim)
       // Use ONE cube art on every level so blocks look identical throughout (levels 2–4 shipped
       // a smaller-drawn 'block_small_*' sprite that made the block appear smaller than level 1).
       game.c.normalCubeSprite = { path: "assets/img/Group_471__1_.png", nativeSize: [177, 177] };
