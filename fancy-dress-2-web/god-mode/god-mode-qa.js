@@ -54,7 +54,6 @@
       self._assert(!!global.CONFIG, "window.CONFIG present", "window.CONFIG MISSING");
       self._assert(!!global.__LM, "window.__LM (LevelManager) present", "window.__LM MISSING");
       self._assert(!!global.VoiceTextSync && typeof global.VoiceTextSync.play === "function", "VoiceTextSync controller present", "VoiceTextSync MISSING");
-      self._assert(!!global.LevelTransition && typeof global.LevelTransition.run === "function", "LevelTransition present", "LevelTransition MISSING");
       var g = self._g();
       if (!self._assert(!!g, "window.balancingGame adapter present", "balancingGame adapter MISSING — game not ready")) return;
       var ls = g.levels();

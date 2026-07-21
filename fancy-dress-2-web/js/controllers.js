@@ -958,49 +958,25 @@
   };
 
   LevelManager.prototype._watchActivation = function () {
-    // When a level node becomes visible, start it once — unless a transition is mid-swap
-    // (it starts the incoming level itself, once the overlay is gone).
+    // When a level node becomes visible, start it once.
     var self = this;
     E.onTick(function () {
-      if (self._suspendAutostart) return;
       self.levels.forEach(function (entry) {
         if (!entry.started && E.isActive(entry.node)) self._ensureStarted(entry);
       });
     });
   };
 
-  // Themed "Level Complete → Next Challenge" transition between levels.
-  // The incoming level is swapped in UNDER the opaque overlay and only started (its
-  // instruction narration only released) once the overlay has faded away.
+  // Level switch — instant swap. (The themed "Level Complete → Next Challenge" transition
+  // was removed; levels now change immediately.) A rapid second click just re-swaps the same
+  // pair harmlessly, and _ensureStarted is idempotent, so no level is ever started twice.
   LevelManager.prototype._runLevelTransition = function (offNode, onNode) {
-    var self = this;
-    var LT = global.LevelTransition;
     var offEntry = this.byNode[offNode], onEntry = this.byNode[onNode];
-    // A transition is already mid-flight (rapid double-click / repeated Next): ignore the
-    // duplicate entirely. Doing the plain swap here would activate + start the next level a
-    // second time under the overlay and start its narration early — duplicated navigation.
-    if (LT && LT.isRunning()) return;
-    if (!LT || !onEntry) {
-      // fallback: plain swap only when the themed transition genuinely can't run
-      // (system absent / unknown target) — never block progression.
-      E.setActive(offNode, false); E.setActive(onNode, true);
-      if (onEntry) self._ensureStarted(onEntry);
-      return;
-    }
-    this._suspendAutostart = true;
     var idx = this.levels.indexOf(offEntry);
     if (typeof window.SendLevelComplete === "function") try { window.SendLevelComplete(idx, this.levels.length); } catch (e) { }
-    LT.run({
-      completedIndex: idx,
-      onRevealNext: function () {           // under the opaque overlay — swap, don't start
-        E.setActive(offNode, false);
-        E.setActive(onNode, true);
-      },
-      onNextReady: function () {            // overlay gone — safe to start + narrate
-        self._suspendAutostart = false;
-        if (onEntry) self._ensureStarted(onEntry);
-      }
-    });
+    E.setActive(offNode, false);
+    E.setActive(onNode, true);
+    if (onEntry) this._ensureStarted(onEntry);
   };
 
   LevelManager.prototype._wireButtonEvents = function () {
