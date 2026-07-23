@@ -7,7 +7,6 @@
   var CFG = global.CONFIG;
   var REF_W = CFG.canvasScaler.referenceW;   // 1920
   var REF_H = CFG.canvasScaler.referenceH;   // 1080
-  var MATCH = CFG.canvasScaler.match;        // 0.5
   var stage, root;
   var nodes = {};        // id -> {node, el, contentEl}
   var scale = 1;
@@ -313,10 +312,50 @@
   function computeScale() {
     var w = window.innerWidth, h = window.innerHeight;
     var sw = w / REF_W, sh = h / REF_H;
-    // MatchWidthOrHeight in log space
-    var logW = Math.log(sw), logH = Math.log(sh);
-    scale = Math.exp(logW * (1 - MATCH) + logH * MATCH);
+    // Fit-to-screen (contain): scale so the entire 1920×1080 stage is always
+    // fully visible on any aspect ratio / device, letterboxing with the page
+    // background. This replaces Unity's MatchWidthOrHeight (match=0.5), which
+    // cropped the stage on non-16:9 screens (e.g. portrait phones).
+    scale = Math.min(sw, sh);
     stage.style.transform = "translate(-50%,-50%) scale(" + scale + ")";
+  }
+
+  // "Please rotate your device" overlay for touch devices held in portrait.
+  // The game is authored landscape-only (16:9); on a phone in portrait it would
+  // letterbox down to an unusably small strip, so we prompt for landscape.
+  function setupOrientation() {
+    var ov = document.createElement("div");
+    ov.id = "rotate-overlay";
+    ov.innerHTML =
+      '<div class="rotate-inner">' +
+      '<div class="rotate-phone">📱</div>' +
+      '<div class="rotate-text">Please rotate your device</div>' +
+      '<div class="rotate-sub">This game plays best in landscape</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+
+    var mqCoarse = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
+    function isTouch() {
+      return (mqCoarse && mqCoarse.matches) ||
+        ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+    }
+
+    var wasShown = false;
+    function update() {
+      var portrait = window.innerHeight > window.innerWidth;
+      var show = portrait && isTouch();
+      ov.classList.toggle("show", show);
+      if (show !== wasShown) {
+        // Pause/resume the voice-over only on the transition so we don't fight
+        // God Mode's own pause. AudioMgr.resume() no-ops on ended/unpaused clips.
+        try { show ? AudioMgr.pause() : AudioMgr.resume(); } catch (e) { }
+        wasShown = show;
+      }
+    }
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    update();
+    global.__updateOrientation = update;
   }
 
   function boot(layout) {
@@ -334,6 +373,8 @@
     }
     computeScale();
     window.addEventListener("resize", computeScale);
+    window.addEventListener("orientationchange", computeScale);
+    setupOrientation();
   }
 
   /* ---------------- effects ---------------- */

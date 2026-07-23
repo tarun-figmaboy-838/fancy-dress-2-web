@@ -123,9 +123,9 @@
   WeightMeasuringGame.ITEM_DISPLAY = {
     // Pencil-box bag: art is cropped to the edges, so at the 514² slot it renders ~1.5×
     // the bowl width and juts out the right side and top. Seat it at a bowl-sized box.
-    "assets/img/ChatGPT_Image_Mar_12__2026__03_23_00_PM__1__2.png": { w: 300, h: 300, rot: 0 },
+    "assets/img/ChatGPT_Image_Mar_12__2026__03_23_00_PM__1__2.webp": { w: 300, h: 300, rot: 0 },
     // Doll: size + exact placement tuned via the live editor (requested).
-    "assets/img/IMG_5014_1.png": { w: 546.83, h: 508.17, left: -128.6, top: -210, rot: 0 }
+    "assets/img/IMG_5014_1.webp": { w: 546.83, h: 508.17, left: -128.6, top: -210, rot: 0 }
   };
   // Resize/reposition the item node in its own coordinate space (it stays a child of the
   // Image container, so it keeps riding the pan tilt). Horizontally centred on the bowl,
@@ -928,8 +928,8 @@
       game.cubePrefab = { size: [170, 186] }; // weight-block size (shrunk ~15% so a full pan of blocks stays inside the bowl, not spilling over the rim)
       // Use ONE cube art on every level so blocks look identical throughout (levels 2–4 shipped
       // a smaller-drawn 'block_small_*' sprite that made the block appear smaller than level 1).
-      game.c.normalCubeSprite = { path: "assets/img/Group_471__1_.png", nativeSize: [177, 177] };
-      game.c.wrongCubeSprite = { path: "assets/img/Group_4712.png", nativeSize: [177, 177] };
+      game.c.normalCubeSprite = { path: "assets/img/Group_471__1_.webp", nativeSize: [177, 177] };
+      game.c.wrongCubeSprite = { path: "assets/img/Group_4712.webp", nativeSize: [177, 177] };
       tut.game = game;
       var entry = { node: L.levelNode, game: game, tut: tut, started: false, cfg: L };
       self.levels.push(entry);

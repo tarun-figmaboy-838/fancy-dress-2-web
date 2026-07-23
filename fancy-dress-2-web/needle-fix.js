@@ -2,7 +2,7 @@
   "use strict";
 
   const SELECTOR = '#stage [data-name="needle"]';
-  const MAX_ANGLE = 20;
+  const MAX_ANGLE = 40;
   const SMOOTH_SPEED = 3;
 
   let needle = null;
@@ -39,7 +39,7 @@
       top: "100px",
       width: "87px",
       height: "97px",
-      transformOrigin: "50% 50%",
+      transformOrigin: "50% 62%",
       willChange: "transform",
       pointerEvents: "none"
     });
@@ -52,12 +52,12 @@
     if (!element) return;
 
     /*
-      Original Unity mapping:
-      balance -1 = needle +20deg
-      balance  0 = needle 0deg
-      balance +1 = needle -20deg
+      Needle points toward the HEAVIER side:
+      balance -1 (item heavier, too few blocks) = needle -40deg (leans to item side)
+      balance  0 (balanced)                     = needle 0deg
+      balance +1 (too many blocks)              = needle +40deg (leans to blocks side)
     */
-    const angle = -MAX_ANGLE * currentBalance;
+    const angle = MAX_ANGLE * currentBalance;
 
     element.style.transform =
       `rotate(${angle.toFixed(3)}deg) scale(1)`;

@@ -9,8 +9,10 @@
   width: 87px !important;
   height: 97px !important;
 
-  /* Correct Unity pivot */
-  transform-origin: 50% 50% !important;
+  /* Pivot on the bearing dot (~62% down) where the needle meets the fulcrum, so
+     the tip sweeps a wide, obvious arc like a real gauge — a centre pivot just
+     spins it in place and the tilt barely reads. */
+  transform-origin: 50% 62% !important;
 
   will-change: transform;
   pointer-events: none;
