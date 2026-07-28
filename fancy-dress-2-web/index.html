@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Fancy Dress 2 — Balancing Act</title>
-  <link rel="stylesheet" href="css/style.css?v=2" />
+  <!-- The display face is used by the very first line of text; preloading it means the text is
+       drawn in Lilita One from the start instead of swapping fonts and re-flowing. -->
+  <link rel="preload" href="assets/fonts/LilitaOne-Regular.ttf" as="font" type="font/ttf" crossorigin />
+  <link rel="stylesheet" href="css/style.css?v=8" />
   <link rel="stylesheet" href="needle-fix.css?v=2" />
 </head>
 <body>
@@ -12,9 +15,10 @@
     <div id="stage"></div>
   </div>
   <script src="js/data.js"></script>
-  <script src="js/engine.js?v=2"></script>
-  <script src="js/vo-sync.js"></script>
-  <script src="js/controllers.js"></script>
+  <script src="js/sfx.js?v=8"></script>
+  <script src="js/engine.js?v=8"></script>
+  <script src="js/vo-sync.js?v=8"></script>
+  <script src="js/controllers.js?v=8"></script>
   <script src="js/main.js"></script>
   <script src="needle-fix.js?v=2"></script>
 
