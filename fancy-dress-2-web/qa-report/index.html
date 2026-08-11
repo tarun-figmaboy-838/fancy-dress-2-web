@@ -194,15 +194,15 @@
   </div>
   <div class="meta">
     <span><b>Repo</b> tarun-figmaboy-838/fancy-dress-2-web</span>
-    <span><b>Commit</b> <code>89091da</code> on main</span>
-    <span><b>Build</b> style.css v28 · engine.js v31 · controllers.js v33</span>
+    <span><b>Commit</b> <code>e0b553d</code> on main</span>
+    <span><b>Build</b> style.css v37 · engine.js v31 · controllers.js v39</span>
   </div>
 
   <div class="band">
     <div class="stat"><div class="k">Items raised</div><div class="v">10</div></div>
     <div class="stat"><div class="k">Closed</div><div class="v ok">9</div></div>
     <div class="stat"><div class="k">Needs an asset</div><div class="v" style="color:var(--hold)">1</div></div>
-    <div class="stat"><div class="k">Checks run</div><div class="v">296</div></div>
+    <div class="stat"><div class="k">Checks run</div><div class="v">309</div></div>
     <div class="stat"><div class="k">Failing</div><div class="v ok">0</div></div>
     <div class="stat"><div class="k">Levels covered</div><div class="v">4 / 4</div></div>
   </div>
@@ -222,9 +222,10 @@
         <tr><td>Hover</td><td>Hover shade, scoping, guards</td><td class="num">11</td><td class="num">0</td><td class="num">0</td></tr>
         <tr><td>Locked-card tap</td><td>15 visual properties × 3 taps</td><td class="num">28</td><td class="num">0</td><td class="num">0</td></tr>
         <tr><td>Idle nudge</td><td>Threshold, hand, deepened pulse, stop-on-press</td><td class="num">36</td><td class="num">0</td><td class="num">0</td></tr>
-        <tr><td>Title voice-over</td><td>Requested on load, never re-triggers, Let's Go still stops it</td><td class="num">8</td><td class="num">0</td><td class="num">0</td></tr>
-        <tr><td>Voice-over retry — refused</td><td>Bounded retries, stands down, first tap starts it once</td><td class="num">6</td><td class="num">0</td><td class="num">0</td></tr>
-        <tr><td>Voice-over retry — accepted</td><td>Exactly one request, retries stop dead</td><td class="num">4</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Title voice-over</td><td>Requested on load, scenery taps silent, Let's Go still stops it</td><td class="num">9</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Title-line button</td><td>Exists, pressable, hover and press states, one start per press</td><td class="num">18</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Tap during the retry window</td><td>A tap mid-retry starts nothing</td><td class="num">4</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Tap after the retry window</td><td>A later tap starts nothing either</td><td class="num">4</td><td class="num">0</td><td class="num">0</td></tr>
         <tr><td>Boot smoke</td><td>All 4 levels start, console clean</td><td class="num">all</td><td class="num">0</td><td class="num">0</td></tr>
       </tbody>
     </table>
@@ -350,14 +351,47 @@
           <figcaption><b>Ten taps, zero audio.</b> Taps landed on the bookshelf, sky, wall, centre, title
             and floor. The line was not started or interrupted once.</figcaption>
         </figure>
-        <div class="note" style="margin-top:16px"><b>One platform caveat.</b> The page asks to play the
-          line the moment it loads. Browsers refuse an audible autoplay until the page has been
-          interacted with, and no page script can override that. Inside the app's web view it plays
-          automatically once
-          <code>mediaPlaybackRequiresUserGesture</code> is false (Android) or
-          <code>mediaTypesRequiringUserActionForPlayback</code> is empty (iOS). In a plain browser
-          tab the line instead starts on the learner's first touch — once, and it can never
-          re-trigger after that.</div>
+      </div>
+      <div style="grid-column:1/-1">
+        <h3>The two routes, and only those two</h3>
+        <p>The acceptance wording allows the line to play “once automatically upon page load, or when
+          clicking an intentional audio icon/button if intended”. Both are built; nothing else can
+          start it.</p>
+        <ul class="ev" style="max-width:none">
+          <li><span class="lbl"><b>1 · On load.</b> Requested as the screen appears, and re-requested for
+            about five seconds in case the host had not granted playback yet</span><span class="val"><span class="now">automatic where allowed</span></span></li>
+          <li><span class="lbl"><b>2 · The speaker button.</b> Top-left of the welcome art, always available,
+            no browser configuration</span><span class="val"><span class="now">on demand</span></span></li>
+          <li><span class="lbl">A tap on the scenery</span><span class="val"><span class="now">silent, always</span></span></li>
+        </ul>
+        <div class="shots two" style="margin-top:20px">
+          <figure>
+            <div class="shot"><img alt="The welcome screen with a round white speaker button in the top-left corner, clear of the title, the two children and the Let's Go button." src="shots/vo-button.png" /></div>
+            <figcaption><b>Where it sits.</b> Top-left, clear of the title, both children and Let's Go.
+              The artwork itself stays inert — the button opts back into taps on its own.</figcaption>
+          </figure>
+          <figure>
+            <div class="shot" style="background:var(--line-firm)"><img alt="The speaker button in three states: at rest on a blue bump, hovered with a deeper bump and darker icon, and pressed with the bump collapsed." src="shots/vo-button-states.png" /></div>
+            <figcaption><b>Two states, no idle animation.</b> Hover lifts the cap and deepens the blue;
+              pressing sinks it onto the bump. Hover is mouse-only so it cannot latch on a tablet.</figcaption>
+          </figure>
+        </div>
+        <div class="note" style="margin-top:18px"><b>Two things were wrong here before this build, and
+          both are worth knowing.</b> A “first tap anywhere starts the line” fallback had been added so
+          a refused autoplay would still be heard — but a tap on the scenery is not a request for audio,
+          and it broke this very rule, so it is gone. Removing it was not enough on its own: a tap is
+          what grants a page permission to make sound, so a retry landing a few hundred milliseconds
+          later was still allowed and still started the line, which looked identical to the defect.
+          The first touch anywhere now <em>stops</em> the asking rather than enabling it.</div>
+        <div class="note" style="margin-top:12px"><b>On “automatically”.</b> Whether the on-load request
+          is granted is the browser's decision, not the page's, and no script can override it. It plays
+          by itself inside an app web view with
+          <code>mediaPlaybackRequiresUserGesture</code> false (Android) or
+          <code>mediaTypesRequiringUserActionForPlayback</code> empty (iOS), in Edge with
+          <code>edge://settings/content/mediaAutoplay</code> set to Allow, or once a browser has built
+          up engagement for the site. Everywhere else the speaker button covers it, which is why route
+          2 exists. A one-page checker ships at <code>/autoplay-check.html</code> so anyone can see
+          which case they are in.</div>
       </div>
     </div>
   </article>
@@ -574,11 +608,11 @@
         <p>Item 10's visual nudge is live. The spoken reminder needs a clip that does not exist yet.
           One line of wiring once it does.</p>
       </div>
-      <div class="openitem">
-        <h3>Automatic title voice-over — needs one app-side flag</h3>
-        <p>The page already asks to play the line on load. Whether it is allowed is decided by the
-          host, not by the page. Setting the web view's gesture requirement to false makes it
-          automatic everywhere, with no change to the game.</p>
+      <div class="openitem" style="border-left-color:var(--pass)">
+        <h3 style="color:var(--pass)">Title voice-over — resolved, one optional improvement left</h3>
+        <p>The line is guaranteed hearable: the speaker button works in every browser with no
+          configuration. If you also want it to speak <em>by itself</em>, that is one flag on the host —
+          the web view's gesture requirement set to false — with no change to the game.</p>
       </div>
       <div class="openitem">
         <h3>The five-second idle threshold covers Next only</h3>
