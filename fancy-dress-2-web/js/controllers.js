@@ -1311,6 +1311,7 @@
     this._wireButtonEvents();
     // ButtonAnimator (intro Lets go)
     this._buttonAnimator();
+    this._playIntroNarration();   // the title line, once, as the welcome screen comes up
     // start level 1 (its GO active in scene? Level1 root is inactive; ButtonAnimator shows it)
     // Level roots are inactive at boot; they start when made active.
     this._watchActivation();
@@ -1434,6 +1435,42 @@
   // The start screen is deliberately silent. The spoken title line and the tap-to-start cue that
   // a refused autoplay used to show were both removed at the author's request.
 
+  /* ---- the title line ----
+     Spoken once as the welcome screen loads. Browsers refuse an audible autoplay until the page has
+     been interacted with, so the attempt's outcome is inspected: if it was refused, the learner's
+     first gesture anywhere starts the line instead — once, after which the listeners are removed.
+     It can therefore never overlap or restart itself, which was the reported defect, and the welcome
+     art is no longer a button so tapping the scenery does nothing at all.
+     A first gesture that lands on "Let's go" is skipped: that tap is leaving the screen, and
+     starting the line there would speak a word and be cut off immediately. */
+  LevelManager.prototype._playIntroNarration = function () {
+    if (!CFG.introAudio) return;
+    var ba = CFG.buttonAnimator;
+    var goEl = ba && ba.goButton ? E.get(ba.goButton) : null;
+    var settled = false;
+    var EVENTS = ["pointerdown", "keydown", "touchstart"];
+
+    function detach() {
+      EVENTS.forEach(function (ev) { window.removeEventListener(ev, onGesture, true); });
+    }
+    function onGesture(e) {
+      if (settled) return;
+      settled = true;
+      detach();
+      var t = e && e.target;
+      if (goEl && t && (t === goEl || goEl.contains(t))) return;   // they pressed Go, not the page
+      E.Audio.play(CFG.introAudio);
+    }
+
+    E.Audio.play(CFG.introAudio);
+    E.Audio.lastAttempt.then(function () {
+      settled = true;                                  // the browser allowed it; never start again
+    }, function () {
+      if (settled) return;                             // refused: wait for one gesture, then once
+      EVENTS.forEach(function (ev) { window.addEventListener(ev, onGesture, true); });
+    });
+  };
+
   LevelManager.prototype._dispatch = function (call) {
     var self = this;
     if (call.method === "SetActive") {
@@ -1443,7 +1480,9 @@
       var entry = this.byNode[call.target];
       if (entry) entry.tut.onNextClicked();
     } else if (call.method === "Play") {
-      /* The only authored Play() call was the intro title line, which has been removed. */
+      /* The only authored Play() was a Button on the full-screen welcome art, which made every tap
+         on the scenery restart the title line. That host is deliberately not wired any more — the
+         line is started once by _playIntroNarration() as the screen loads. */
     } else if (call.method === "Stop") {
       E.Audio.stop();
     }
