@@ -1437,20 +1437,20 @@
   // a refused autoplay used to show were both removed at the author's request.
 
   /* ---- the title line ----
-     Spoken once as the welcome screen loads. Browsers refuse an audible autoplay until the page has
-     been interacted with, so the attempt's outcome is inspected: if it was refused, the learner's
-     first gesture anywhere starts the line instead — once, after which the listeners are removed.
-     It can therefore never overlap or restart itself, which was the reported defect, and the welcome
-     art is no longer a button so tapping the scenery does nothing at all.
-     A first gesture that lands on "Let's go" is skipped: that tap is leaving the screen, and
-     starting the line there would speak a word and be cut off immediately. */
+     Exactly the two routes QA's acceptance wording allows, and nothing else:
+       1. it is requested as the welcome screen loads, and re-requested for a few seconds in case the
+          host had not granted playback yet;
+       2. the speaker button on the welcome art plays it on demand.
+     There is deliberately NO "first tap anywhere starts it" fallback. That existed briefly and was
+     wrong: a tap on the scenery is not a request for audio, and the spec is explicit that background
+     clicks must not trigger or interrupt playback. With a real button on screen the fallback bought
+     nothing and broke the rule.
+     A tap on the artwork therefore does nothing at all — the art is not click-wired, and no listener
+     anywhere is watching for it. */
   LevelManager.prototype._playIntroNarration = function () {
     if (!CFG.introAudio) return;
     var self = this;
-    var ba = CFG.buttonAnimator;
-    var goEl = ba && ba.goButton ? E.get(ba.goButton) : null;
-    var EVENTS = ["pointerdown", "keydown", "touchstart"];
-    var RETRY_MS = 400, MAX_TRIES = 12;               // ~5s of trying, then hand over to the gesture
+    var RETRY_MS = 400, MAX_TRIES = 12;               // roughly five seconds of asking
     var settled = false, tries = 0, timer = null;
 
     function playing() {
@@ -1460,56 +1460,36 @@
     function stop() {
       settled = true;
       if (timer) { clearTimeout(timer); timer = null; }
-      EVENTS.forEach(function (ev) { window.removeEventListener(ev, onGesture, true); });
-      window.removeEventListener("focus", nudge);
       document.removeEventListener("visibilitychange", nudge);
     }
-    // Whichever comes first wins: an allowed autoplay, or the learner's first touch. Armed from the
-    // start so a learner who taps at one second hears the line then, not after the retries expire.
-    function onGesture(e) {
-      if (settled) return;
-      var t = e && e.target;
-      stop();
-      if (goEl && t && (t === goEl || goEl.contains(t))) return;   // they pressed Go, not the page
-      // The title-line button speaks for itself in its own click handler. This listener is on the
-      // window in the CAPTURE phase, so it runs BEFORE that handler and a stopPropagation() there
-      // cannot hold it back — without this guard the first press on the button plays the line twice.
-      var b = self && self._introBtn;
-      if (b && t && (t === b || b.contains(t))) return;
-      if (!playing()) E.Audio.play(CFG.introAudio);
-    }
-    // One attempt is not enough. A web view may not have granted playback yet when the page boots,
-    // and on a real origin the browser may only permit it once engagement has accrued — so the
-    // request is repeated for a few seconds. The moment one is allowed, everything is torn down, so
-    // the line can still never start twice or overlap itself.
+    // One attempt is not enough: a web view may not have granted playback when the page boots, and a
+    // browser may only permit it once engagement has accrued. The moment one request is allowed,
+    // everything is torn down, so the line can never start twice or overlap itself.
     function attempt() {
       if (settled) return;
       if (playing()) { stop(); return; }
       tries++;
       E.Audio.play(CFG.introAudio);
-      E.Audio.lastAttempt.then(function () { stop(); }, function () {
-        if (settled || tries >= MAX_TRIES) return;     // give up quietly; the gesture is still armed
+      E.Audio.lastAttempt.then(function () { stop(); self._introHeard(); }, function () {
+        if (settled || tries >= MAX_TRIES) return;    // give up quietly; the button is always there
         timer = setTimeout(attempt, RETRY_MS);
       });
     }
-    function nudge() { if (!settled && tries < MAX_TRIES) attempt(); }
+    // The page becoming visible can flip permission. Note this is NOT a click: no pointer or key
+    // listener is registered anywhere, which is what keeps a background tap silent.
+    function nudge() { if (!settled && tries < MAX_TRIES && !document.hidden) attempt(); }
 
-    // The deliberate control QA asked for, as the third way in. Marked "heard" once the line has
-    // actually started by any route, which is what stops it drawing attention to itself.
     this._introHeard = function () {
       if (self._introBtn) self._introBtn.classList.add("heard");
     };
     this._introSpeak = function () {
-      E.Audio.play(CFG.introAudio);                    // play() stops the channel first, so no overlap
-      stop();                                          // the learner has chosen: stop retrying and listening
+      E.Audio.play(CFG.introAudio);                   // play() stops the channel first, so no overlap
+      stop();                                         // the learner asked directly; stop retrying
       self._introHeard();
     };
 
-    EVENTS.forEach(function (ev) { window.addEventListener(ev, onGesture, true); });
-    window.addEventListener("focus", nudge);           // returning to the tab can flip permission
     document.addEventListener("visibilitychange", nudge);
     attempt();
-    E.Audio.lastAttempt.then(function () { self._introHeard(); }, function () { });
   };
 
   /* ---- the title-line button ----
