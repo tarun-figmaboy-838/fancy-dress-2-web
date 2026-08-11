@@ -133,6 +133,46 @@ html, body {
 /* full-screen "tap anywhere" targets accept the tap but are not discrete controls */
 .unode[data-ambient="1"] { cursor: default; }
 
+/* ---- the title-line button on the welcome screen ----
+   Top-left, clear of the title, the children and "Let's go". Sits inside the Intro node so it scales
+   with the stage and leaves with the screen. Its parent has pointer-events:none — a child may opt
+   back in, which is exactly the point: the artwork stays inert and only this is pressable. */
+.intro-vo-btn {
+  position: absolute; left: 56px; top: 56px; width: 112px; height: 112px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 6px 0 #2a94c9, 0 12px 18px rgba(15, 40, 58, 0.28);
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: margin-top .08s ease-out, box-shadow .1s ease-out,
+              background-color .1s ease-out, filter .1s ease-out;
+}
+.intro-vo-btn svg { width: 60px; height: 60px; display: block; }
+.intro-vo-btn svg path { fill: #1f86ba; }
+.intro-vo-btn svg path.w1, .intro-vo-btn svg path.w2 {
+  fill: none; stroke: #1f86ba; stroke-width: 2; stroke-linecap: round;
+}
+/* hover — mouse only, and the same language as the game's other buttons: the cap rises, the bump
+   grows, and the blue deepens. Gated on (hover: hover) so it cannot latch on a tablet after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  .intro-vo-btn:hover:not(.pressed) {
+    margin-top: -2px;
+    background: #fff;
+    box-shadow: 0 8px 0 #1a7aa8, 0 15px 22px rgba(15, 40, 58, 0.34);
+  }
+  .intro-vo-btn:hover:not(.pressed) svg path { fill: #17698f; }
+  .intro-vo-btn:hover:not(.pressed) svg path.w1,
+  .intro-vo-btn:hover:not(.pressed) svg path.w2 { stroke: #17698f; }
+}
+/* pressed — sinks onto its own bump, exactly as Next and Check do */
+.intro-vo-btn.pressed {
+  margin-top: 6px;
+  box-shadow: 0 0 0 #2a94c9, 0 3px 6px rgba(15, 40, 58, 0.3);
+  filter: brightness(0.95);
+}
+.intro-vo-btn:focus-visible { outline: 4px solid #1f86ba; outline-offset: 4px; }
+
 /* runtime-spawned cubes */
 .cube {
   position: absolute;

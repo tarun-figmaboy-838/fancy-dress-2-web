@@ -1311,7 +1311,8 @@
     this._wireButtonEvents();
     // ButtonAnimator (intro Lets go)
     this._buttonAnimator();
-    this._playIntroNarration();   // the title line, once, as the welcome screen comes up
+    this._playIntroNarration();       // the title line, once, as the welcome screen comes up
+    this._buildIntroAudioButton();    // and a deliberate way to hear it whatever the browser allows
     // start level 1 (its GO active in scene? Level1 root is inactive; ButtonAnimator shows it)
     // Level roots are inactive at boot; they start when made active.
     this._watchActivation();
@@ -1445,6 +1446,7 @@
      starting the line there would speak a word and be cut off immediately. */
   LevelManager.prototype._playIntroNarration = function () {
     if (!CFG.introAudio) return;
+    var self = this;
     var ba = CFG.buttonAnimator;
     var goEl = ba && ba.goButton ? E.get(ba.goButton) : null;
     var EVENTS = ["pointerdown", "keydown", "touchstart"];
@@ -1469,6 +1471,11 @@
       var t = e && e.target;
       stop();
       if (goEl && t && (t === goEl || goEl.contains(t))) return;   // they pressed Go, not the page
+      // The title-line button speaks for itself in its own click handler. This listener is on the
+      // window in the CAPTURE phase, so it runs BEFORE that handler and a stopPropagation() there
+      // cannot hold it back — without this guard the first press on the button plays the line twice.
+      var b = self && self._introBtn;
+      if (b && t && (t === b || b.contains(t))) return;
       if (!playing()) E.Audio.play(CFG.introAudio);
     }
     // One attempt is not enough. A web view may not have granted playback yet when the page boots,
@@ -1487,10 +1494,65 @@
     }
     function nudge() { if (!settled && tries < MAX_TRIES) attempt(); }
 
+    // The deliberate control QA asked for, as the third way in. Marked "heard" once the line has
+    // actually started by any route, which is what stops it drawing attention to itself.
+    this._introHeard = function () {
+      if (self._introBtn) self._introBtn.classList.add("heard");
+    };
+    this._introSpeak = function () {
+      E.Audio.play(CFG.introAudio);                    // play() stops the channel first, so no overlap
+      stop();                                          // the learner has chosen: stop retrying and listening
+      self._introHeard();
+    };
+
     EVENTS.forEach(function (ev) { window.addEventListener(ev, onGesture, true); });
     window.addEventListener("focus", nudge);           // returning to the tab can flip permission
     document.addEventListener("visibilitychange", nudge);
     attempt();
+    E.Audio.lastAttempt.then(function () { self._introHeard(); }, function () { });
+  };
+
+  /* ---- the title-line button ----
+     A speaker in the corner of the welcome art, so hearing the line never depends on the browser
+     allowing autoplay or on the learner happening to tap. Deliberately not the artwork itself: the
+     art stays inert, which is what the reported defect was about.
+     It sits inside the Intro node, so it scales with the stage and disappears with the screen when
+     "Let's go" is pressed. It breathes gently until the line has been heard, then settles. */
+  LevelManager.prototype._buildIntroAudioButton = function () {
+    if (!CFG.introAudio) return;
+    var intro = E.get("1956632644");
+    if (!intro || intro.querySelector(".intro-vo-btn")) return;
+    var self = this;
+
+    var b = document.createElement("div");
+    b.className = "intro-vo-btn";
+    b.setAttribute("role", "button");
+    b.setAttribute("tabindex", "0");
+    b.setAttribute("aria-label", "Play the title again");
+    b.title = "Play the title again";
+    b.innerHTML =
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' +
+        '<path d="M4 9.5h3.2L12 5.4v13.2L7.2 14.5H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/>' +
+        '<path class="w1" d="M15.4 8.9a4.2 4.2 0 0 1 0 6.2"/>' +
+        '<path class="w2" d="M18 6.4a7.8 7.8 0 0 1 0 11.2"/>' +
+      '</svg>';
+
+    function speak(e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      if (self._introSpeak) self._introSpeak();
+      else E.Audio.play(CFG.introAudio);
+    }
+    b.addEventListener("pointerdown", function (e) { e.stopPropagation(); b.classList.add("pressed"); });
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) {
+      b.addEventListener(ev, function () { b.classList.remove("pressed"); });
+    });
+    b.addEventListener("click", speak);
+    b.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") speak(e);
+    });
+
+    intro.appendChild(b);
+    this._introBtn = b;
   };
 
   LevelManager.prototype._dispatch = function (call) {
