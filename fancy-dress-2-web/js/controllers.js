@@ -1447,28 +1447,50 @@
     if (!CFG.introAudio) return;
     var ba = CFG.buttonAnimator;
     var goEl = ba && ba.goButton ? E.get(ba.goButton) : null;
-    var settled = false;
     var EVENTS = ["pointerdown", "keydown", "touchstart"];
+    var RETRY_MS = 400, MAX_TRIES = 12;               // ~5s of trying, then hand over to the gesture
+    var settled = false, tries = 0, timer = null;
 
-    function detach() {
-      EVENTS.forEach(function (ev) { window.removeEventListener(ev, onGesture, true); });
+    function playing() {
+      var cur = E.Audio.current();
+      return !!(cur && !cur.paused && !cur.ended && /Balancing_game/.test(cur.currentSrc || cur.src || ""));
     }
+    function stop() {
+      settled = true;
+      if (timer) { clearTimeout(timer); timer = null; }
+      EVENTS.forEach(function (ev) { window.removeEventListener(ev, onGesture, true); });
+      window.removeEventListener("focus", nudge);
+      document.removeEventListener("visibilitychange", nudge);
+    }
+    // Whichever comes first wins: an allowed autoplay, or the learner's first touch. Armed from the
+    // start so a learner who taps at one second hears the line then, not after the retries expire.
     function onGesture(e) {
       if (settled) return;
-      settled = true;
-      detach();
       var t = e && e.target;
+      stop();
       if (goEl && t && (t === goEl || goEl.contains(t))) return;   // they pressed Go, not the page
-      E.Audio.play(CFG.introAudio);
+      if (!playing()) E.Audio.play(CFG.introAudio);
     }
+    // One attempt is not enough. A web view may not have granted playback yet when the page boots,
+    // and on a real origin the browser may only permit it once engagement has accrued — so the
+    // request is repeated for a few seconds. The moment one is allowed, everything is torn down, so
+    // the line can still never start twice or overlap itself.
+    function attempt() {
+      if (settled) return;
+      if (playing()) { stop(); return; }
+      tries++;
+      E.Audio.play(CFG.introAudio);
+      E.Audio.lastAttempt.then(function () { stop(); }, function () {
+        if (settled || tries >= MAX_TRIES) return;     // give up quietly; the gesture is still armed
+        timer = setTimeout(attempt, RETRY_MS);
+      });
+    }
+    function nudge() { if (!settled && tries < MAX_TRIES) attempt(); }
 
-    E.Audio.play(CFG.introAudio);
-    E.Audio.lastAttempt.then(function () {
-      settled = true;                                  // the browser allowed it; never start again
-    }, function () {
-      if (settled) return;                             // refused: wait for one gesture, then once
-      EVENTS.forEach(function (ev) { window.addEventListener(ev, onGesture, true); });
-    });
+    EVENTS.forEach(function (ev) { window.addEventListener(ev, onGesture, true); });
+    window.addEventListener("focus", nudge);           // returning to the tab can flip permission
+    document.addEventListener("visibilitychange", nudge);
+    attempt();
   };
 
   LevelManager.prototype._dispatch = function (call) {
