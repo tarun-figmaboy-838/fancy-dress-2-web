@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Autoplay check — The Balancing Game</title>
+  <style>
+    :root {
+      --ink: #131a1f; --soft: #4a5a66; --faint: #7b8b97;
+      --ground: #eef2f5; --paper: #fff; --line: #dce4ea;
+      --ok: #12795c; --ok-bg: #e3f3ee; --no: #ad2b21; --no-bg: #fbe9e7;
+      --wait: #8a6410; --wait-bg: #fbf1dc; --accent: #1f86ba;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --ink: #e7eef4; --soft: #a2b2bf; --faint: #74848f;
+        --ground: #0d1317; --paper: #151e25; --line: #25313a;
+        --ok: #4cc79f; --ok-bg: #12312a; --no: #f08579; --no-bg: #351916;
+        --wait: #e0b45c; --wait-bg: #322616; --accent: #54b6e2;
+      }
+    }
+    :root[data-theme="dark"] {
+      --ink: #e7eef4; --soft: #a2b2bf; --faint: #74848f;
+      --ground: #0d1317; --paper: #151e25; --line: #25313a;
+      --ok: #4cc79f; --ok-bg: #12312a; --no: #f08579; --no-bg: #351916;
+      --wait: #e0b45c; --wait-bg: #322616; --accent: #54b6e2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--ground); color: var(--ink);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px;
+    }
+    .card {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 14px;
+      max-width: 680px; width: 100%; padding: 30px 32px 34px;
+      box-shadow: 0 1px 2px rgba(19,26,31,.06), 0 10px 30px -14px rgba(19,26,31,.22);
+    }
+    h1 { font-size: 19px; margin: 0 0 4px; letter-spacing: .01em; }
+    .sub { color: var(--faint); font-size: 13.5px; margin: 0 0 24px; }
+    #verdict {
+      font-size: clamp(26px, 6vw, 40px); font-weight: 800; line-height: 1.14;
+      border-radius: 12px; padding: 22px 24px; margin: 0 0 18px; text-wrap: balance;
+      background: var(--wait-bg); color: var(--wait);
+    }
+    #verdict.ok { background: var(--ok-bg); color: var(--ok); }
+    #verdict.no { background: var(--no-bg); color: var(--no); }
+    dl { margin: 0 0 20px; display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; font-size: 14.5px; }
+    dt { color: var(--soft); }
+    dd { margin: 0; font-family: ui-monospace, Consolas, monospace; word-break: break-word; }
+    .next { border-top: 1px solid var(--line); padding-top: 18px; }
+    .next h2 { font-size: 13px; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); margin: 0 0 10px; }
+    .next p { margin: 0 0 10px; font-size: 14.5px; color: var(--soft); max-width: 60ch; }
+    code { background: var(--ground); border: 1px solid var(--line); border-radius: 4px; padding: .08em .36em; font-size: .9em; }
+    button {
+      font: inherit; font-weight: 600; cursor: pointer; margin-top: 4px;
+      background: var(--accent); color: #fff; border: 0; border-radius: 9px; padding: 11px 18px;
+    }
+    button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Does the title voice-over play by itself here?</h1>
+    <p class="sub">Runs the exact request the game makes on its welcome screen, on this origin, in this
+      browser, and reports what the browser answered. Nothing is assumed.</p>
+
+    <div id="verdict">Asking the browser…</div>
+
+    <dl>
+      <dt>Browser answered</dt><dd id="d-verdict">…</dd>
+      <dt>Reason given</dt><dd id="d-reason">…</dd>
+      <dt>Clip</dt><dd id="d-clip">…</dd>
+      <dt>Origin</dt><dd id="d-origin">…</dd>
+      <dt>Browser</dt><dd id="d-ua">…</dd>
+    </dl>
+
+    <div class="next" id="advice"></div>
+  </div>
+
+  <script>
+  (function () {
+    var SRC = "assets/audio/The_Balancing_game__1_.ogg";
+    var $ = function (id) { return document.getElementById(id); };
+    $("d-origin").textContent = location.origin;
+    $("d-ua").textContent = (navigator.userAgentData && navigator.userAgentData.brands
+      ? navigator.userAgentData.brands.map(function (b) { return b.brand + " " + b.version; }).join(", ")
+      : navigator.userAgent);
+
+    var a = new Audio(SRC);
+    a.addEventListener("loadedmetadata", function () {
+      $("d-clip").textContent = SRC + "  (" + a.duration.toFixed(1) + "s)";
+    });
+    a.addEventListener("error", function () { $("d-clip").textContent = SRC + "  — could not load"; });
+
+    function say(cls, text, reason, adviceHTML) {
+      var v = $("verdict");
+      v.className = cls;
+      v.textContent = text;
+      $("d-verdict").textContent = cls === "ok" ? "allowed" : "refused";
+      $("d-reason").textContent = reason;
+      $("advice").innerHTML = adviceHTML;
+    }
+
+    var ALLOWED_ADVICE =
+      '<h2>Nothing to do</h2>' +
+      '<p>This browser lets the game speak its title line on its own. The learner hears it without ' +
+      'touching anything.</p>';
+
+    var REFUSED_ADVICE =
+      '<h2>What this means</h2>' +
+      '<p>This is the browser\'s rule, not a fault in the game. Browsers refuse to play sound until ' +
+      'the page has been interacted with. The game asks anyway, repeatedly, for about five seconds — ' +
+      'and if it is refused, the line starts on the first tap instead, once.</p>' +
+      '<h2>To make it automatic</h2>' +
+      '<p><b>Edge:</b> open <code>edge://settings/content/mediaAutoplay</code> and set it to ' +
+      '<b>Allow</b>. Easiest option, and it can be set for this site only.</p>' +
+      '<p><b>Inside an app:</b> set the web view\'s ' +
+      '<code>mediaPlaybackRequiresUserGesture</code> to false on Android, or ' +
+      '<code>mediaTypesRequiringUserActionForPlayback</code> to empty on iOS. This is the one that ' +
+      'covers every learner without configuring their browser.</p>' +
+      '<p><b>Left alone:</b> Chrome and Edge keep a record of sites whose audio you have played. ' +
+      'After a few visits where the line is heard, this browser may begin allowing it here by itself.</p>' +
+      '<p>Press the button to confirm the clip itself plays fine once a tap has happened.</p>' +
+      '<p><button id="try">Play the title line now</button></p>';
+
+    function wireTry() {
+      var b = $("try");
+      if (!b) return;
+      b.addEventListener("click", function () {
+        a.currentTime = 0;
+        a.play().then(function () { b.textContent = "Playing — the clip and the file are fine"; b.disabled = true; },
+                      function (e) { b.textContent = "Even on a tap it failed: " + e.name; });
+      });
+    }
+
+    var settled = false;
+    var p = a.play();
+    if (p && p.then) {
+      p.then(function () {
+        if (settled) return; settled = true;
+        say("ok", "Yes — it plays by itself in this browser.", "the play request was accepted", ALLOWED_ADVICE);
+      }, function (e) {
+        if (settled) return; settled = true;
+        say("no", "No — this browser blocked it until you interact with the page.",
+            (e && e.name ? e.name : "refused") + (e && e.message ? ": " + e.message : ""), REFUSED_ADVICE);
+        wireTry();
+      });
+    } else {
+      setTimeout(function () {
+        if (settled) return; settled = true;
+        if (!a.paused) say("ok", "Yes — it plays by itself in this browser.", "playback started", ALLOWED_ADVICE);
+        else { say("no", "No — this browser blocked it until you interact with the page.",
+                   "playback did not start", REFUSED_ADVICE); wireTry(); }
+      }, 1200);
+    }
+  })();
+  </script>
+</body>
+</html>
