@@ -89,9 +89,15 @@
       currentVO = a; a.currentTime = 0;
       a.muted = voMuted;
       a.playbackRate = 1; // never let slow-motion debug distort voice pitch
-      var p = a.play(); if (p && p.catch) p.catch(function () { });
+      var p = a.play();
+      // Expose the attempt's outcome. A browser refuses an audible autoplay with NotAllowedError
+      // until the page has been interacted with, and the intro line needs to know that happened so
+      // it can arrange to start on a gesture instead of being silently dropped.
+      this.lastAttempt = (p && p.then) ? p : Promise.resolve();
+      if (p && p.catch) p.catch(function () { });  // keep the rejection handled either way
       return a;
     },
+    lastAttempt: Promise.resolve(),
     stop: function () { if (currentVO) { try { currentVO.pause(); currentVO.currentTime = 0; } catch (e) { } currentVO = null; } },
     // Pause / resume the active VO channel WITHOUT resetting its position
     // (used by God Mode pause and by the sync controller).
@@ -293,16 +299,58 @@
     var el = get(id); if (!el) return;
     el.dataset.interactable = on ? "1" : "0";
   }
-  function onClick(id, fn) {
+  /* ---------------- tap sound ----------------
+     Every button in the game is wired through onClick(), so the tap sound belongs here rather than
+     at each call site. It is played from ONE delegated listener on the stage, not from a listener
+     per button, because either of those would double it: a few nodes are wired twice (the intro's
+     "Let's go" by both the ButtonAnimator and the button-events table), and pointerdown bubbles, so
+     a wired button sitting inside a wired container would sound for each of them. Walking up from
+     the event target and stopping at the first wired node gives exactly one sound per tap, credited
+     to the innermost control the finger actually landed on. */
+  var clickSfx = null;
+  function setClickSfx(src) { clickSfx = src || null; }
+
+  function bindClickSfx() {
+    if (!stage || stage._sfxBound) return;
+    stage._sfxBound = true;
+    stage.addEventListener("pointerdown", function (e) {
+      var n = e.target;
+      while (n && n !== stage) {
+        if (n._clickWired) {
+          if (n.dataset.interactable !== "0" && !n._clickSilent && clickSfx) {
+            AudioMgr.playOneShot(clickSfx);
+          }
+          return;                                  // innermost wired node wins; never sound twice
+        }
+        n = n.parentElement;
+      }
+    }, true);
+  }
+
+  // opts.ambient — wire the tap without advertising it. For whole-screen "tap anywhere" targets
+  // (the Intro welcome art carries a Unity Button that replays its narration): a pointer cursor
+  // there would paint the entire screen as clickable and make static scenery look actionable.
+  // opts.silent — wire the tap without the click sound (an ambient surface is not a button).
+  function onClick(id, fn, opts) {
     var el = get(id); if (!el) return;
-    el.style.cursor = "pointer";
+    // The cursor is driven by [data-interactable] in the stylesheet, never written inline —
+    // an inline cursor outranks the rules, so setInteractable(id, false) could not take the
+    // pointer back off a disabled button (plus/minus at their limits, a completed card).
+    if (el.dataset.interactable == null) el.dataset.interactable = "1";
+    if (opts && opts.ambient) el.dataset.ambient = "1";
     el.style.pointerEvents = "auto"; /* wired elements capture clicks even under decorative overlays */
+    // Marked, not listened to: the delegated stage handler above plays the sound once per tap.
+    el._clickWired = true;
+    if (opts && (opts.silent || opts.ambient)) el._clickSilent = true;
     el.addEventListener("pointerdown", function (e) {
       if (el.dataset.interactable === "0") return;
       el.classList.add("pressed");
     });
-    el.addEventListener("pointerup", function () { el.classList.remove("pressed"); });
-    el.addEventListener("pointerleave", function () { el.classList.remove("pressed"); });
+    // Released, moved off, or the gesture taken over by a scroll — the cap must come back up in
+    // every one of those cases, never stick down.
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) {
+      el.addEventListener(ev, function () { el.classList.remove("pressed"); });
+    });
     el.addEventListener("click", function (e) {
       if (el.dataset.interactable === "0") return;
       e.stopPropagation();
@@ -397,6 +445,7 @@
     stage = document.getElementById("stage");
     stage.style.width = REF_W + "px";
     stage.style.height = REF_H + "px";
+    bindClickSfx();
     // Find Canvas root (overlay). Build canvas children directly into stage at reference size.
     var canvas = null;
     for (var i = 0; i < layout.length; i++) if (layout[i].name === "Canvas") canvas = layout[i];
@@ -459,6 +508,44 @@
      upward out of the bowl, not in both directions. The node's own inline transform-origin is
      saved and restored, and re-popping mid-bounce restarts cleanly. */
   var POP_MS = 500;
+  // "nope" — a damped head-shake on whatever the learner just got wrong. Driven as a tween that
+  // APPENDS a translateX to whatever transform the node already carries, rather than as a CSS class
+  // that would replace it: the balance pans sit on an inline translateY from the beam tilt and the
+  // answer cards on a scale() from setScale(), and either would snap to the wrong place mid-shake.
+  // Returns a promise so a caller can shake, then speak, then reveal, in that order.
+  function nope(idOrEl, opts) {
+    var el = typeof idOrEl === "string" ? get(idOrEl) : idOrEl;
+    if (!el) return Promise.resolve();
+    if (global.matchMedia && global.matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
+    var amp = (opts && opts.amplitude) || 15;
+    var dur = (opts && opts.duration) || 0.42;
+    var base = el._nopeBase != null ? el._nopeBase : (el._nopeBase = el.style.transform || "");
+    if (el._nopeTok) el._nopeTok.cancelled = true;      // a second wrong answer restarts the shake
+    var tok = el._nopeTok = { cancelled: false };
+    // First kick applied synchronously, so the shake starts on the same frame as the wrong answer
+    // instead of waiting for the tween's first callback.
+    el.style.transform = base + " translateX(" + amp.toFixed(2) + "px)";
+    // Raced against a hard cap: the node MUST come back to where it started even if the frame loop
+    // stalls mid-shake, or a pan of the balance would be left permanently shoved to one side.
+    return Promise.race([
+      tween(dur, "Linear", function (t) {
+        if (tok.cancelled) return;
+        var dx = Math.sin(t * Math.PI * 6) * amp * (1 - t);   // six passes, dying away
+        el.style.transform = base + " translateX(" + dx.toFixed(2) + "px)";
+      }, tok),
+      wait(dur + 0.3)
+    ]).then(function () {
+      if (el._nopeTok !== tok) return;                  // a newer shake owns the node now
+      // Cancel first. If the safety cap won the race the tween is still live, and its next frame
+      // would re-append a translateX over the restore — leaving the node displaced by however far
+      // through the shake it had got.
+      tok.cancelled = true;
+      el.style.transform = base;
+      el._nopeBase = null;
+      el._nopeTok = null;
+    });
+  }
+
   function pop(idOrEl, opts) {
     var el = typeof idOrEl === "string" ? get(idOrEl) : idOrEl;
     if (!el) return;
@@ -521,10 +608,11 @@
     boot: boot, get: get, getReg: getReg, setActive: setActive, isActive: isActive,
     setAlpha: setAlpha, setText: setText, getText: getText, setSprite: setSprite,
     setImageAlpha: setImageAlpha, setInteractable: setInteractable, onClick: onClick,
+    setClickSfx: setClickSfx,
     setScale: setScale, getScale: getScale, nodeCenterRef: nodeCenterRef,
     tween: tween, wait: wait, ease: ease, Ease: Ease,
     TaskGroup: TaskGroup, ck: ck, onTick: onTick,
-    Audio: AudioMgr, confetti: confetti, pop: pop,
+    Audio: AudioMgr, confetti: confetti, pop: pop, nope: nope,
     preloadImages: preloadImages, decodeImages: decodeImages, preloadAudioMeta: preloadAudioMeta,
     nodes: nodes, stageEl: function () { return stage; }, applyImage: applyImage
   };

@@ -584,6 +584,11 @@
     E.onClick(c.bagButton, function () { self.onBagSelected(); });
     if (c.finalBookButton) E.onClick(c.finalBookButton, function () { self.onFinalBookClicked(); });
     if (c.finalBagButton) E.onClick(c.finalBagButton, function () { self.onFinalBagClicked(); });
+    // Next is the only way forward whenever it is on screen, so it breathes to say so — the same
+    // cue the intro uses for "Let's go". Armed once here; the pulse idles while the button is
+    // hidden, so it needs no stopping at the handful of places that reveal or hide it.
+    if (c.nextButton) this._pulseButton(c.nextButton, true);
+    if (c.finalnextButton) this._pulseButton(c.finalnextButton, true);
     // Next & finalNext buttons wired by LevelManager via button-events.
     // (Selection cards keep their authored size — the completion text below each card is
     // authored for that size, so leaving it untouched keeps text centred + spaced correctly.)
@@ -706,8 +711,15 @@
   TP.onTryAgain = function () {
     this._clearHint("tryagain");
     this.stopCurrentInstruction();
+    this._pulseButton(this.c.tryAgainButton, false);
     E.setActive(this.c.tryAgainButton, false);
     E.setActive(this.c.instructionBar, true);
+    // Check comes straight back; +/- are handed to updatePlusMinusState(), which knows whether the
+    // count is already at its floor or ceiling. Called here rather than relying on the Less/More
+    // branches below, so no path can leave a learner with a dead + or -.
+    this._unlockOut(this._blockControlIds(), false);
+    E.setInteractable(this.game.c.checkButton, true);
+    this.game.updatePlusMinusState();
     var currentResult = this.game.lastResult;
     this.game.handleTryAgain();
     this.plusClicked = false; this.instruction3Completed = true;
@@ -730,8 +742,8 @@
       await this.playCompletionInstruction(this.c.bookCompleteInstruction, this.c.bookCompleteInstructionAudio_path);
     else
       await this.playCompletionInstruction(this.c.bagCompleteInstruction, this.c.bagCompleteInstructionAudio_path);
-    E.setActive(this.c.nextButton, true);
-    this._hintTimer("next", this.c.buttonHintDelay, null, this.c.nextButton);
+    await this._revealButton(this.c.nextButton);
+    this._armIdleNudge(this.c.nextButton);
   };
   TP.playCompletionInstruction = function (message, clipPath) {
     var self = this;
@@ -745,6 +757,7 @@
   TP.onNextClicked = function () {
     if (this.isNextProcessing) return;
     this.isNextProcessing = true;
+    this._clearIdleNudge();     // pressed: stop the deepened breath and take the hand away
     var c = this.c;
     if (E.isActive(c.tapPanel)) {
       E.setActive(c.nextButton, false);
@@ -817,7 +830,8 @@
       await E.wait(0.15);
       if (c.bagCompletedText) { var m2 = E.getText(c.bagCompletedText); E.setActive(c.bagCompletedText, true); await this._typeTMP(c.bagCompletedText, m2, c.bagCompleteInstructionAudio_path); }
       await E.wait(0.5);
-      E.setActive(c.nextButton, true);
+      await this._revealButton(c.nextButton);
+      this._armIdleNudge(c.nextButton);
       return;
     }
     await this.playInstructionAndWait(c.instruction7, c.instruction7Audio_path);
@@ -920,33 +934,154 @@
       el.style.backgroundSize = "100% 100%"; // neutral card fills its box
     }
   };
+  /* ---- shared lock-out, used by every "you got it wrong, press Try again" state ----
+     Whenever feedback is on screen, the controls that produced it go out of play until the learner
+     resets. setInteractable() alone only stops the click; it leaves the control looking and
+     hovering exactly as it did a moment earlier. These two do the whole job in one place so the
+     block stage and the final tap stage behave identically on every level. */
+  TP._lockOut = function (ids, pickedId) {
+    ids.filter(Boolean).forEach(function (id) {
+      E.setInteractable(id, false);
+      var el = E.get(id); if (!el) return;
+      el.classList.add("locked-out");
+      if (id === pickedId) el.classList.add("locked-pick");
+    });
+  };
+  TP._unlockOut = function (ids, reenable) {
+    ids.filter(Boolean).forEach(function (id) {
+      var el = E.get(id);
+      if (el) el.classList.remove("locked-out", "locked-pick");
+      if (reenable !== false) E.setInteractable(id, true);
+    });
+  };
+  TP._finalCardIds = function () { return [this.c.finalBookButton, this.c.finalBagButton]; };
+  // +, - and Check are what produced a wrong block count, so they lock together.
+  TP._blockControlIds = function () {
+    var g = this.game && this.game.c; if (!g) return [];
+    return [g.plusButton, g.minusButton, g.checkButton];
+  };
+
+  // Buttons arrive, they do not blink into existence: a quick OutBack pop from nothing, which is
+  // the same entrance the answer cards use. Any pulse on the node is held while it lands, otherwise
+  // the pulse ticker would overwrite the scale the tween is driving, then handed back.
+  TP._revealButton = async function (id) {
+    if (!id) return;
+    var pulsing = !!(this._pulses && this._pulses[id]);
+    if (pulsing) this._pulseButton(id, false);
+    // Starts at 0.72, never 0, and the tween is raced against a hard 0.6s cap that forces the
+    // final scale. A button the learner has to press is not allowed to depend on an animation
+    // finishing: if the frame loop ever stalls, the worst case is it appears at 72% and snaps to
+    // full, rather than sitting at scale 0 — invisible, with the level unfinishable.
+    E.setScale(id, 0.72);
+    E.setActive(id, true);
+    await Promise.race([
+      E.tween(0.34, "OutBack", function (t) { E.setScale(id, 0.72 + 0.28 * t); }),
+      E.wait(0.6)
+    ]);
+    // Unconditional, even if the reveal was overtaken (level switched, reset pressed) while the
+    // pop was in flight: the button is never left parked at its entry scale.
+    E.setScale(id, 1);
+    if (pulsing && E.isActive(id)) this._pulseButton(id, true);
+  };
+
+  // The one live control breathes, the way the intro's "Let's go" does: same 1s-each-way InOutSine
+  // yoyo as _buttonAnimator. Tokenised so a second wrong answer never leaves two pulses fighting.
+  // The pulse idles while its button is hidden and resets it to rest on the way out, so it can be
+  // armed once and left alone rather than started and stopped at every reveal site.
+  // opts.strong — the nudged breath: deeper and quicker, so an idle learner cannot miss it. Same
+  // mechanism, just a wider band, rather than a second competing animation.
+  TP._pulseButton = function (id, on, opts) {
+    if (!id) return;
+    this._pulses = this._pulses || {};
+    if (!on) {
+      this._pulses[id] = null;
+      if (this._pulseStrong) this._pulseStrong[id] = false;
+      E.setScale(id, 1);
+      return;
+    }
+    var strong = !!(opts && opts.strong);
+    var lo = strong ? 0.88 : 0.94, hi = strong ? 1.06 : 1, period = strong ? 1.3 : 2;
+    // Which band is running is recorded rather than left implicit in a closure, so the nudged state
+    // is inspectable — by God Mode, and by a test that cannot sample a frame loop reliably.
+    this._pulseStrong = this._pulseStrong || {};
+    this._pulseStrong[id] = strong;
+    var self = this, t0 = performance.now(), token = this._pulses[id] = {};
+    E.onTick(function () {
+      if (self._pulses[id] !== token) return;
+      if (!E.isActive(id)) {
+        // Park a hidden button at rest whatever left it off 1 — a pulse frame or an entry pop —
+        // so it can never be revealed already part-scaled.
+        if (Math.abs(E.getScale(id) - 1) > 0.001) E.setScale(id, 1);
+        return;
+      }
+      var t = ((performance.now() - t0) / 1000) % period / period;
+      var v = t < 0.5 ? E.ease("InOutSine", t * 2) : E.ease("InOutSine", (1 - t) * 2);
+      E.setScale(id, lo + (hi - lo) * v);
+    });
+  };
+
+  /* ---- idle nudge ----
+     Once a slide is finished, the revealed Next is the only thing left to do — but the screen used
+     to go completely static and wait, with nothing inviting the learner on. Only one of the four
+     places that reveal Next had any hint at all, and the "That is correct!" screen was not one of
+     them. So every reveal now arms the same escalation:
+        on reveal   — the button pops in and breathes  (already the case)
+        after N sec — the breath deepens AND the game's own animated hand comes in and points at it
+     Both stop the instant the button is pressed, and neither fires if the button has since gone
+     away. N comes from `nextHintDelay` if a level authors one, otherwise 5 seconds. */
+  TP._armIdleNudge = function (id) {
+    if (!id) return;
+    var self = this;
+    var delay = this.c.nextHintDelay != null ? this.c.nextHintDelay : 5;
+    this._clearIdleNudge();
+    this._idleNudgeId = id;
+    this._idleNudgeTimer = setTimeout(function () {
+      self._idleNudgeTimer = null;
+      if (!E.isActive(id)) return;          // learner already moved on, or the screen changed
+      self._pulseButton(id, true, { strong: true });
+      self._showRing("next", id);
+    }, delay * 1000);
+  };
+  TP._clearIdleNudge = function () {
+    if (this._idleNudgeTimer) { clearTimeout(this._idleNudgeTimer); this._idleNudgeTimer = null; }
+    this._clearHint("next");
+    if (this._idleNudgeId) {
+      // back to the ordinary breath, so the button never re-appears mid-shout
+      if (this._pulses && this._pulses[this._idleNudgeId]) this._pulseButton(this._idleNudgeId, true);
+      this._idleNudgeId = null;
+    }
+  };
   TP.handleFinalAnswer = function (isCorrect, imgId) {
-    E.setInteractable(this.c.finalBookButton, false);
-    E.setInteractable(this.c.finalBagButton, false);
+    this._lockOut(this._finalCardIds(), imgId);
     if (isCorrect) {
       this._setCardState(imgId, null, "correct");
+      E.pop(imgId || this.c.finalBookButton);
       E.confetti(imgId || this.c.finalBookButton);
       this.correctFinalAnswerFlow();
     } else {
       this._setCardState(imgId, null, "wrong");
+      E.nope(imgId);                       // the card shakes its head
       this.wrongFinalAnswerFlow();
     }
   };
   TP.correctFinalAnswerFlow = async function () {
     await this.playInstructionAndWait(this.c.correctAnswerInstruction, this.c.correctAnswerAudio_path);
-    E.setActive(this.c.nextButton, true);
+    await this._revealButton(this.c.nextButton);
+    this._armIdleNudge(this.c.nextButton);   // the "That is correct!" screen QA found static
   };
   TP.wrongFinalAnswerFlow = async function () {
+    // This stage's own line, unchanged; only the button's entrance is new.
     await this.playInstructionAndWait(this.c.wrongAnswerInstruction, this.c.wrongAnswerAudio_path);
-    E.setActive(this.c.finalTryAgainButton, true);
+    await this._revealButton(this.c.finalTryAgainButton);
+    this._pulseButton(this.c.finalTryAgainButton, true);
   };
   TP.onFinalTryAgainClicked = function () {
     var c = this.c;
+    this._pulseButton(c.finalTryAgainButton, false);
     E.setActive(c.finalTryAgainButton, false);
     if (c.finalBookImage && c.defaultBookSprite) this._setCardState(c.finalBookImage, c.defaultBookSprite.path, "neutral");
     if (c.finalBagImage && c.defaultBagSprite) this._setCardState(c.finalBagImage, c.defaultBagSprite.path, "neutral");
-    E.setInteractable(c.finalBookButton, true);
-    E.setInteractable(c.finalBagButton, true);
+    this._unlockOut(this._finalCardIds());
     this.isRetryingFinalTap = true;
     this.startTapActivity();
   };
@@ -954,11 +1089,24 @@
   /* ---- less / more cubes ---- */
   TP.onLessCubes = function () { E.setActive(this.c.instructionBar, true); this._lessMoreFlow(); };
   TP.onMoreCubes = function () { E.setActive(this.c.instructionBar, true); this._lessMoreFlow(); };
-  TP._lessMoreFlow = function () {
-    E.setActive(this.c.instructionBar, false);
-    E.setActive(this.c.tryAgainButton, true);
-    if (this.c.tryAgainAudio_path) { E.Audio.stop(); E.Audio.playOneShot(this.c.tryAgainAudio_path); }
-    this._hintTimer("tryagain", this.c.buttonHintDelay, null, this.c.tryAgainButton);
+  // Wrong number of blocks. This used to drop "Try again" on screen the same instant Check was
+  // pressed, with its audio starting underneath it — so the button read as if it had always been
+  // there, and nothing marked the moment the learner got it wrong. The stage now reacts in order,
+  // using the line this stage already had ("Try again") and adding no new narration:
+  //   1. the controls go out of play
+  //   2. the pan of blocks shakes its head — the blocks are already turning red
+  //   3. the "Try again" line starts, and the button pops in with it
+  TP._lessMoreFlow = async function () {
+    var c = this.c;
+    // Out of play before anything else: no changing the answer behind the feedback.
+    this._lockOut(this._blockControlIds());
+    E.setActive(c.tryAgainButton, false);
+    E.setActive(c.instructionBar, false);
+    await E.nope(this.game.c.rightBasket);      // the wrong answer lands on its own first
+    if (c.tryAgainAudio_path) { E.Audio.stop(); E.Audio.playOneShot(c.tryAgainAudio_path); }
+    await this._revealButton(c.tryAgainButton); // arrives as the words "Try again" are spoken
+    this._pulseButton(c.tryAgainButton, true);
+    this._hintTimer("tryagain", c.buttonHintDelay, null, c.tryAgainButton);
   };
 
   /* ---- compare-stage layout (both cards + their "Weight of … = N blocks" text) ----
@@ -1019,7 +1167,7 @@
     await this.playInstructionAndWait(c.finalConclusionInstruction, c.finalConclusionAudio_path);
     await E.wait(1);
     if (this.isLastLevel) this.showGameOverFlow();
-    else E.setActive(c.finalnextButton, true);
+    else { await this._revealButton(c.finalnextButton); this._armIdleNudge(c.finalnextButton); }
   };
   TP._typeBottom = function (msg, clip) { var self = this; this._botTok = { cancelled: false }; return this._typeInto((t) => E.setText(self.c.bottomBarText, t), msg || "", clip, this._botTok); };
 
@@ -1155,6 +1303,10 @@
       self.byNode[String(L.gameFid)] = entry;
     });
     this._warmAssets();
+    // One tap sound for every button in the game. The intro's "Let's go" already carried this clip
+    // in its own config; handing it to the engine gives the same feedback to +, -, Check, the two
+    // option cards, Try again and Next, on every level, instead of just that one button.
+    E.setClickSfx((CFG.buttonAnimator && CFG.buttonAnimator.buttonClickAudio) || "assets/audio/btn.mp3");
     // wire button events (SetActive level swaps, OnNextClicked, intro Play/Stop)
     this._wireButtonEvents();
     // ButtonAnimator (intro Lets go)
@@ -1259,12 +1411,28 @@
         if (self.byNode[c.target]) { if (c.bool) onCall = c; else offCall = c; }
       });
       var isLevelSwitch = onCall && offCall && setActives.length === meaningful.length;
+      // A Unity Button authored on full-screen artwork is not a control, and must not be wired
+      // like one: it covers the whole 1920x1080 stage, so scenery — the bookshelf, the wall, the
+      // floor — becomes both clickable and pointer-cursored.
+      var hostEl = E.get(hostNode);
+      var fillsStage = hostEl &&
+        parseFloat(hostEl.style.width) >= 1920 * 0.9 &&
+        parseFloat(hostEl.style.height) >= 1080 * 0.9;
+      // The welcome art carries such a Button whose only job is Play() on its own AudioSource,
+      // so every click anywhere on the screen restarted the title narration from the top. The
+      // title line is gone now, so this host stays unwired and the artwork stays inert —
+      // .unode is pointer-events:none until onClick opts it in.
+      var audioOnly = meaningful.every(function (c) { return c.method === "Play" || c.method === "Stop"; });
+      if (fillsStage && audioOnly) return;
       E.onClick(hostNode, function () {
         if (isLevelSwitch) { self._runLevelTransition(offCall.target, onCall.target); return; }
         meaningful.forEach(function (call) { self._dispatch(call); });
-      });
+      }, { ambient: fillsStage }); /* a full-screen host with real calls still keeps its cursor off */
     });
   };
+
+  // The start screen is deliberately silent. The spoken title line and the tap-to-start cue that
+  // a refused autoplay used to show were both removed at the author's request.
 
   LevelManager.prototype._dispatch = function (call) {
     var self = this;
@@ -1275,7 +1443,7 @@
       var entry = this.byNode[call.target];
       if (entry) entry.tut.onNextClicked();
     } else if (call.method === "Play") {
-      if (CFG.introAudio) E.Audio.play(CFG.introAudio);
+      /* The only authored Play() call was the intro title line, which has been removed. */
     } else if (call.method === "Stop") {
       E.Audio.stop();
     }
@@ -1297,7 +1465,7 @@
     E.setActive(ba.gameplayPanel, false); // Level1 hidden until Go
     var introEl = document.querySelector('#stage > [data-name="Intro"]');
     E.onClick(goId, function () {
-      if (ba.buttonClickAudio) E.Audio.playOneShot(ba.buttonClickAudio);
+      // the click sound now comes from the engine, for every button alike
       pulsing = false;
       E.setInteractable(goId, false);
       setTimeout(function () {

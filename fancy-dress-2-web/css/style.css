@@ -11,6 +11,14 @@
   caret-color: transparent;
   -webkit-user-select: none; -moz-user-select: none; user-select: none;
   -webkit-user-drag: none; -webkit-touch-callout: none;
+  /* No platform tap flash. A wired control keeps pointer-events:auto even while it is switched off,
+     so mobile Chromium and WebKit count it as a tap target and paint their own translucent blue
+     rectangle over it the moment a finger lands — before any script runs, and regardless of the
+     interactable guard that correctly refuses the tap. That is what made a completed option card
+     appear to highlight on the post-answer screen while nothing actually happened, and why it only
+     showed on touch devices. This suppresses the browser's overlay only; the game's own pressed and
+     locked-out styling is untouched. */
+  -webkit-tap-highlight-color: transparent;
 }
 #stage img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
 html, body {
@@ -48,8 +56,82 @@ html, body {
 }
 
 .unode.pressed { filter: brightness(0.92); }
-.unode[data-interactable="1"], .unode[data-interactable="0"] { cursor: pointer; }
+
+/* ---- primary buttons: Next / finalNext / Try again / Check ----
+   The authored art is the same flat pill for all four — one solid blue, no bevel, no shadow — so on
+   the wooden table it reads as a painted-on label rather than something to press. drop-shadow()
+   follows the sprite's own alpha, so a hard offset shadow in a darker blue gives the pill a solid
+   bottom lip: the bump. No art is replaced; the sprite is untouched.
+
+   Two states, nothing else — no shine, no flash:
+     up    — sitting on an 8px bump, waiting to be pressed
+     down  — .pressed: margin-top pushes the button 8px down while the lip shrinks to 0, so the cap
+             physically travels into its own base and the whole thing goes a dark tone.
+
+   The travel uses margin-top, not transform: these nodes carry an inline transform from setScale()
+   (Next breathes, Try again pulses) that a transform here would overwrite. Margins apply to
+   absolutely positioned elements, so it moves without touching that.
+
+   Names come from the Unity export and vary ("finalNext Btn ", "Tryagain Btn (1)"), hence ^=. */
+.unode:is([data-name="Next Btn"], [data-name^="finalNext Btn"],
+          [data-name^="Tryagain Btn"], [data-name^="Check Btn"]) {
+  filter:
+    drop-shadow(0 8px 0 #1f86ba)                 /* the bump it stands on */
+    drop-shadow(0 11px 9px rgba(15, 40, 58, 0.34));
+  transition: filter 0.08s ease-out, margin-top 0.08s ease-out;
+}
+/* pressed — dark tone, and the cap sinks the full height of the bump */
+.unode:is([data-name="Next Btn"], [data-name^="finalNext Btn"],
+          [data-name^="Tryagain Btn"], [data-name^="Check Btn"]).pressed {
+  margin-top: 8px;
+  filter:
+    drop-shadow(0 0 0 #1f86ba)
+    drop-shadow(0 2px 3px rgba(15, 40, 58, 0.3))
+    brightness(0.78) saturate(0.92);
+}
+/* switched off — same dark tone, sunk and left there, so "not available" and "being pressed" read
+   as one idea rather than two. Driven off [data-interactable], the game's own enabled flag. */
+.unode:is([data-name="Next Btn"], [data-name^="finalNext Btn"],
+          [data-name^="Tryagain Btn"], [data-name^="Check Btn"])[data-interactable="0"] {
+  margin-top: 8px;
+  filter:
+    drop-shadow(0 0 0 #55707f)
+    drop-shadow(0 2px 3px rgba(15, 40, 58, 0.2))
+    brightness(0.7) saturate(0.35);
+}
+
+/* ---- hover ----
+   Mouse only. Gated on (hover: hover) and (pointer: fine) because on a touch screen :hover latches
+   after a tap and the button would stay in its hover shade until something else was touched — the
+   learners are mostly on tablets, so they must never see this.
+   Every rule is also gated on [data-interactable="1"], so a switched-off button never lights up,
+   and carries :not(.pressed) so the press always wins: without it these selectors would be more
+   specific than .pressed and a held button would show its hover shade instead of going down.
+   The three shades read as one progression:  up 1.0  ->  hover 0.93  ->  pressed 0.78. */
+@media (hover: hover) and (pointer: fine) {
+  /* every live control in the game lifts a little — "happens for all buttons" */
+  .unode[data-interactable="1"]:hover:not(.pressed) {
+    filter: brightness(1.07) saturate(1.05);
+  }
+  /* the primary pills get the full treatment: a darker blue, and the bump grows so the cap rises */
+  .unode:is([data-name="Next Btn"], [data-name^="finalNext Btn"],
+            [data-name^="Tryagain Btn"], [data-name^="Check Btn"])[data-interactable="1"]:hover:not(.pressed) {
+    margin-top: -2px;
+    filter:
+      drop-shadow(0 10px 0 #1a7aa8)              /* taller bump, deeper blue */
+      drop-shadow(0 14px 12px rgba(15, 40, 58, 0.38))
+      brightness(0.93) saturate(1.08);
+  }
+}
+/* Cursor is owned by these rules alone — engine onClick never writes it inline, so a button
+   switched off with setInteractable() gives the pointer back instead of keeping it forever.
+   cursor inherits, so the stage alone sets the baseline: a "#stage *" reset here would carry
+   id specificity and outrank the [data-interactable] rules below, killing every real pointer. */
+#stage { cursor: default; }                    /* scenery is never advertised as clickable */
+.unode[data-interactable="1"] { cursor: pointer; }
 .unode[data-interactable="0"] { cursor: default; }
+/* full-screen "tap anywhere" targets accept the tap but are not discrete controls */
+.unode[data-ambient="1"] { cursor: default; }
 
 /* runtime-spawned cubes */
 .cube {
@@ -153,6 +235,17 @@ html, body {
   62%  { transform: translate(-50%, -50%) scale(0.985); }
   100% { transform: translate(-50%, -50%) scale(1); }
 }
+/* The wrong-answer head-shake lives in Engine.nope() as a tween, not as keyframes here: it has to
+   compose with the inline transform these nodes already carry (a beam tilt, or a setScale). */
+
+/* A control that is out of play says so: it dims and desaturates, and (via [data-interactable="0"]
+   above) stops claiming the pointer cursor. Used for the two answer cards during wrong-answer
+   feedback and for +/-/Check while the block count is being corrected.
+   .locked-pick exempts the card the learner actually chose, so it keeps its red halo and their
+   eye lands on their own answer rather than on the dimming. */
+.unode.locked-out { filter: saturate(0.45) brightness(0.82); opacity: 0.72; transition: filter .22s ease, opacity .22s ease; }
+.unode.locked-out.locked-pick { filter: none; opacity: 1; }
+
 .vo-pop { animation: vopop 0.5s cubic-bezier(.34, 1.4, .64, 1) both; }
 .cube:not(.plate-sample).vo-pop { animation-name: vopop-centred; }
 @media (prefers-reduced-motion: reduce) {
