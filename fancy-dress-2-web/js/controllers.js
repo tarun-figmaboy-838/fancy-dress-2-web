@@ -1452,6 +1452,7 @@
     var self = this;
     var RETRY_MS = 400, MAX_TRIES = 12;               // roughly five seconds of asking
     var settled = false, tries = 0, timer = null;
+    var TOUCH = ["pointerdown", "keydown", "touchstart"];
 
     function playing() {
       var cur = E.Audio.current();
@@ -1461,7 +1462,14 @@
       settled = true;
       if (timer) { clearTimeout(timer); timer = null; }
       document.removeEventListener("visibilitychange", nudge);
+      TOUCH.forEach(function (ev) { window.removeEventListener(ev, markTouched, true); });
     }
+    /* The retry loop must not become a tap handler by the back door. A tap is what grants the page
+       permission to make sound, so a retry landing a moment after one would start the line and be
+       indistinguishable from "tapping the background played the audio" — which is the thing the spec
+       forbids and what was still being seen. So the first touch anywhere STOPS the asking. It never
+       starts anything. After that only the speaker button can play the line. */
+    function markTouched() { if (!settled) stop(); }
     // One attempt is not enough: a web view may not have granted playback when the page boots, and a
     // browser may only permit it once engagement has accrued. The moment one request is allowed,
     // everything is torn down, so the line can never start twice or overlap itself.
@@ -1488,6 +1496,9 @@
       self._introHeard();
     };
 
+    TOUCH.forEach(function (ev) {
+      window.addEventListener(ev, markTouched, { capture: true, passive: true });
+    });
     document.addEventListener("visibilitychange", nudge);
     attempt();
   };
