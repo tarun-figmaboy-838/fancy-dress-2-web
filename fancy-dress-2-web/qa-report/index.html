@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Balancing Game — QA fix report</title>
+<style>
+  @font-face {
+    font-family: "Lilita One";
+    src: url("../assets/fonts/LilitaOne-Regular.ttf") format("truetype");
+    font-weight: 400; font-display: block;
+  }
+
+  /* Palette taken from the game itself: the balance beam's charcoal, the button's two blues, the
+     wooden table. Neutrals carry a slight cool bias so they sit with the blue rather than under it. */
+  :root {
+    --ink:        #131a1f;
+    --ink-soft:   #4a5a66;
+    --ink-faint:  #7b8b97;
+    --ground:     #eef2f5;
+    --paper:      #ffffff;
+    --surface:    #f5f8fa;
+    --line:       #dce4ea;
+    --line-firm:  #c3cfd8;
+    --accent:     #1f86ba;
+    --accent-lit: #3fb8ea;
+    --pass:       #12795c;
+    --pass-bg:    #e3f3ee;
+    --fail:       #ad2b21;
+    --fail-bg:    #fbe9e7;
+    --hold:       #8a6410;
+    --hold-bg:    #fbf1dc;
+    --wood:       #dbb083;
+    --shadow:     0 1px 2px rgba(19, 26, 31, .06), 0 8px 24px -12px rgba(19, 26, 31, .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:        #e7eef4;
+      --ink-soft:   #a2b2bf;
+      --ink-faint:  #74848f;
+      --ground:     #0d1317;
+      --paper:      #151e25;
+      --surface:    #1a242c;
+      --line:       #25313a;
+      --line-firm:  #35434e;
+      --accent:     #54b6e2;
+      --accent-lit: #7fcdf0;
+      --pass:       #4cc79f;
+      --pass-bg:    #12312a;
+      --fail:       #f08579;
+      --fail-bg:    #351916;
+      --hold:       #e0b45c;
+      --hold-bg:    #322616;
+      --wood:       #6d5334;
+      --shadow:     0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px -14px rgba(0, 0, 0, .6);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink:        #e7eef4;
+    --ink-soft:   #a2b2bf;
+    --ink-faint:  #74848f;
+    --ground:     #0d1317;
+    --paper:      #151e25;
+    --surface:    #1a242c;
+    --line:       #25313a;
+    --line-firm:  #35434e;
+    --accent:     #54b6e2;
+    --accent-lit: #7fcdf0;
+    --pass:       #4cc79f;
+    --pass-bg:    #12312a;
+    --fail:       #f08579;
+    --fail-bg:    #351916;
+    --hold:       #e0b45c;
+    --hold-bg:    #322616;
+    --wood:       #6d5334;
+    --shadow:     0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px -14px rgba(0, 0, 0, .6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  h1, h2, h3, .num, .tag { font-family: "Lilita One", Impact, "Haettenschweiler", sans-serif; font-weight: 400; }
+  h1 { font-size: clamp(30px, 5vw, 46px); line-height: 1.08; margin: 0 0 10px; text-wrap: balance; letter-spacing: .01em; }
+  h2 { font-size: 21px; margin: 0; letter-spacing: .015em; }
+  h3 { font-size: 13px; margin: 0 0 6px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); }
+  p { margin: 0 0 12px; max-width: 66ch; }
+  code, .mono { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; }
+  code { font-size: .875em; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: .08em .34em; }
+
+  /* ---- masthead ---- */
+  .lede { color: var(--ink-soft); font-size: 17px; max-width: 62ch; margin: 0 0 26px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 8px 26px; font-size: 13.5px; color: var(--ink-faint); margin: 0 0 32px; }
+  .meta b { color: var(--ink-soft); font-weight: 600; }
+
+  /* ---- headline result ---- */
+  .band {
+    background: var(--paper); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: var(--shadow); padding: 22px 24px; margin: 0 0 14px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 20px 12px;
+  }
+  .stat .k { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-faint); }
+  .stat .v { font-family: "Lilita One", Impact, sans-serif; font-size: 30px; line-height: 1.1; margin-top: 2px; }
+  .stat .v.ok { color: var(--pass); }
+  .stat .v.no { color: var(--fail); }
+
+  /* ---- checklist ---- */
+  .tscroll { overflow-x: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin: 0 0 40px; }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14.5px; }
+  caption { text-align: left; padding: 18px 20px 12px; font-family: "Lilita One", Impact, sans-serif; font-size: 19px; letter-spacing: .015em; }
+  th, td { text-align: left; padding: 11px 16px; border-top: 1px solid var(--line); vertical-align: top; }
+  thead th { border-top: 0; font-size: 11.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; background: var(--surface); }
+  tbody tr:hover { background: var(--surface); }
+  td.n { font-family: "Lilita One", Impact, sans-serif; font-size: 17px; color: var(--accent); width: 1%; padding-right: 4px; }
+  td.num, th.num { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .pill { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+  .pill.ok { background: var(--pass-bg); color: var(--pass); }
+  .pill.no { background: var(--fail-bg); color: var(--fail); }
+  .pill.hold { background: var(--hold-bg); color: var(--hold); }
+
+  /* ---- per-bug blocks ---- */
+  .bug { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); margin: 0 0 18px; overflow: hidden; }
+  .bug > header {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    padding: 18px 22px; border-bottom: 1px solid var(--line); background: var(--surface);
+  }
+  .bug > header .num { font-size: 26px; color: var(--accent); line-height: 1; }
+  .bug > header h2 { flex: 1 1 260px; }
+  .body { padding: 20px 22px 22px; display: grid; gap: 22px; }
+  @media (min-width: 800px) { .body.split { grid-template-columns: 1fr 1fr; } }
+  .body p:last-child { margin-bottom: 0; }
+  .quote { border-left: 3px solid var(--line-firm); padding: 2px 0 2px 14px; color: var(--ink-soft); font-size: 15px; }
+  .quote p { margin-bottom: 8px; }
+  .quote p:last-child { margin-bottom: 0; }
+
+  ul.ev { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+  ul.ev li { display: grid; grid-template-columns: 1fr auto; gap: 6px 14px; align-items: baseline; font-size: 14.5px; border-bottom: 1px dashed var(--line); padding-bottom: 8px; }
+  ul.ev li:last-child { border-bottom: 0; padding-bottom: 0; }
+  ul.ev .lbl { color: var(--ink-soft); }
+  ul.ev .val { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+  ul.ev .val .was { color: var(--fail); }
+  ul.ev .val .now { color: var(--pass); font-weight: 600; }
+  ul.ev .val .arrow { color: var(--ink-faint); padding: 0 3px; }
+
+  /* screenshots framed in the game's own table colour */
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 7px; border: 1px solid var(--line-firm); }
+  figure .shot { padding: 7px; background: var(--wood); border-radius: 10px; }
+  figcaption { font-size: 13px; color: var(--ink-faint); margin-top: 9px; }
+  figcaption b { color: var(--ink-soft); }
+  .shots { display: grid; gap: 18px; }
+  @media (min-width: 760px) { .shots.two { grid-template-columns: 1fr 1fr; } }
+
+  .note { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--hold); border-radius: 8px; padding: 14px 16px; font-size: 14.5px; color: var(--ink-soft); }
+  .note b { color: var(--ink); }
+
+  section.open { margin-top: 46px; }
+  .openlist { display: grid; gap: 14px; margin-top: 16px; }
+  .openitem { background: var(--paper); border: 1px solid var(--line); border-left: 3px solid var(--hold); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow); }
+  .openitem h3 { color: var(--hold); margin-bottom: 8px; }
+  .openitem p { font-size: 14.5px; color: var(--ink-soft); margin-bottom: 0; }
+
+  hr.rule { border: 0; border-top: 1px solid var(--line); margin: 44px 0 30px; }
+  .foot { font-size: 13.5px; color: var(--ink-faint); }
+  a { color: var(--accent); }
+  a:focus-visible, tr:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+
+  <h1>The Balancing Game — QA fix report</h1>
+  <p class="lede">Every item raised in this round, what caused it, and the measurement that shows it
+    is closed. All figures are read out of the running game by an automated pass over
+    <b>all four levels</b> — not from a single manual playthrough. Every item has a screenshot taken
+    from the live build.</p>
+
+  <div class="note" style="margin:0 0 30px">
+    <b>How to read the screenshots.</b> A cursor is invisible to a screen capture, so most shots carry
+    a hit-test overlay: the game is probed at 8&nbsp;040 points and each one is tinted by the cursor the
+    browser would actually show there — <span style="color:var(--fail);font-weight:600">red where a hand
+    appears</span>, <span style="color:var(--pass);font-weight:600">green where the arrow stays</span>.
+    A correct screen is green everywhere except the one control the learner is meant to press. The dark
+    band across the top of each shot is measured live from that same screen, not typed in by hand.
+  </div>
+  <div class="meta">
+    <span><b>Repo</b> tarun-figmaboy-838/fancy-dress-2-web</span>
+    <span><b>Commit</b> <code>89091da</code> on main</span>
+    <span><b>Build</b> style.css v28 · engine.js v31 · controllers.js v33</span>
+  </div>
+
+  <div class="band">
+    <div class="stat"><div class="k">Items raised</div><div class="v">10</div></div>
+    <div class="stat"><div class="k">Closed</div><div class="v ok">9</div></div>
+    <div class="stat"><div class="k">Needs an asset</div><div class="v" style="color:var(--hold)">1</div></div>
+    <div class="stat"><div class="k">Checks run</div><div class="v">296</div></div>
+    <div class="stat"><div class="k">Failing</div><div class="v ok">0</div></div>
+    <div class="stat"><div class="k">Levels covered</div><div class="v">4 / 4</div></div>
+  </div>
+
+  <div class="tscroll">
+    <table>
+      <caption>Automated suites — final run against the shipped build</caption>
+      <thead>
+        <tr><th>Suite</th><th>What it checks</th><th class="num">Pass</th><th class="num">Fail</th><th class="num">Skip</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Cursor probe</td><td>Pointer cursor across 5 screens, 8&nbsp;040 sampled points</td><td class="num">all</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Wrong-answer sequencing</td><td>Lock, shake, then reveal on the block stage</td><td class="num">44</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Error-state lock-out</td><td>Both wrong-answer states, all levels</td><td class="num">74</td><td class="num">0</td><td class="num">2</td></tr>
+        <tr><td>Button states + SFX</td><td>Tap sound, bump, press, switched-off</td><td class="num">49</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Locked-state invariant</td><td>11 wired controls × 4 levels</td><td class="num">36</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Hover</td><td>Hover shade, scoping, guards</td><td class="num">11</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Locked-card tap</td><td>15 visual properties × 3 taps</td><td class="num">28</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Idle nudge</td><td>Threshold, hand, deepened pulse, stop-on-press</td><td class="num">36</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Title voice-over</td><td>Requested on load, never re-triggers, Let's Go still stops it</td><td class="num">8</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Voice-over retry — refused</td><td>Bounded retries, stands down, first tap starts it once</td><td class="num">6</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Voice-over retry — accepted</td><td>Exactly one request, retries stop dead</td><td class="num">4</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td>Boot smoke</td><td>All 4 levels start, console clean</td><td class="num">all</td><td class="num">0</td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tscroll">
+    <table>
+      <caption>The ten items, in the order they were raised</caption>
+      <thead>
+        <tr><th>#</th><th>Item</th><th>Status</th><th>Headline evidence</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="n">1</td><td>Pointer cursor over non-interactive welcome-screen areas</td><td><span class="pill ok">Closed</span></td><td class="num">100.0% → 6.7% of surface</td></tr>
+        <tr><td class="n">2</td><td>Title voice-over re-plays and overlaps on background tap</td><td><span class="pill ok">Closed</span></td><td class="num">10 taps → 0 triggers</td></tr>
+        <tr><td class="n">3</td><td>Pointer stays on option cards after a wrong answer</td><td><span class="pill ok">Closed</span></td><td class="num">pointer → default, 4/4 levels</td></tr>
+        <tr><td class="n">4</td><td>Next button looks flat; no tap sound anywhere</td><td><span class="pill ok">Closed</span></td><td class="num">9 buttons × 4 levels, 1 sound each</td></tr>
+        <tr><td class="n">5</td><td>Buttons need a pressed state and no shine or white flash</td><td><span class="pill ok">Closed</span></td><td class="num">travel 0 → 8px, flash = 0</td></tr>
+        <tr><td class="n">6</td><td>Try again appears out of nowhere on the block stage</td><td><span class="pill ok">Closed</span></td><td class="num">0ms → 660ms, after the shake</td></tr>
+        <tr><td class="n">7</td><td>Pointer stays on option cards on the success screen</td><td><span class="pill ok">Closed</span></td><td class="num">16 failures → 0</td></tr>
+        <tr><td class="n">8</td><td>No colour change when hovering Next, or any button</td><td><span class="pill ok">Closed</span></td><td class="num">brightness 1.0 → 0.93</td></tr>
+        <tr><td class="n">9</td><td>Tapping a locked card flashes a blue highlight</td><td><span class="pill ok">Closed</span></td><td class="num">15 properties, zero change</td></tr>
+        <tr><td class="n">10</td><td>Nothing nudges the learner toward Next when idle</td><td><span class="pill hold">Visual done · audio blocked</span></td><td class="num">hand at 4 340ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <hr class="rule" />
+
+  <!-- ================= 1 ================= -->
+  <article class="bug">
+    <header><span class="num">1</span><h2>Pointer cursor over non-interactive welcome-screen areas</h2><span class="pill ok">Closed</span></header>
+    <div class="body">
+      <div class="quote"><p>“Hovering over the welcome screen image turns the cursor into a hand across
+        non-interactive elements, such as near the bookshelf. The pointer should only appear over
+        actionable elements like the Let's Go button.”</p></div>
+      <div>
+        <h3>What caused it</h3>
+        <p>Two things compounding. The welcome artwork is a full-screen image that carries a button
+          component in the original scene, and the web build wired it like any other button — so the
+          entire 1920×1080 surface became a click target. On top of that, the engine wrote
+          <code>cursor: pointer</code> as an inline style on every wired element. An inline style
+          outranks the stylesheet, so the rule meant to hand the cursor back could never win.</p>
+        <p>The cursor is now owned by the stylesheet alone, keyed off the game's own enabled flag, and
+          a full-screen element whose only action is playing its own audio is no longer wired at all.</p>
+      </div>
+      <div class="shots two">
+        <figure>
+          <div class="shot"><img alt="Welcome screen before the fix: a hit-test map showing the entire screen tinted red, meaning a pointer cursor everywhere." src="shots/cursor-before.png" /></div>
+          <figcaption><b>Before.</b> Every one of 8 040 sampled points reports a pointer cursor — the bookshelf, the wall, the children, the table.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img alt="Welcome screen after the fix: the same map now green across the scenery, with red only on the Let's Go button." src="shots/cursor-after.png" /></div>
+          <figcaption><b>After.</b> Red survives only on Let's Go. The button pulses, so its share reads between 5.5% and 7.5% depending on the frame sampled.</figcaption>
+        </figure>
+      </div>
+      <div>
+        <h3>Measured</h3>
+        <ul class="ev">
+          <li><span class="lbl">Share of the welcome screen showing a pointer</span><span class="val"><span class="was">100.0%</span><span class="arrow">→</span><span class="now">6.7%</span></span></li>
+          <li><span class="lbl">Named hit-test points (bookshelf, sky, wall, floor, centre, title, Let's Go)</span><span class="val"><span class="now">7 / 7 pass</span></span></li>
+          <li><span class="lbl">Largest pointer region on any of the 5 screens</span><span class="val"><span class="now">7.5% (the button)</span></span></li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <!-- ================= 2 ================= -->
+  <article class="bug">
+    <header><span class="num">2</span><h2>Title voice-over re-plays and overlaps on background tap</h2><span class="pill ok">Closed</span></header>
+    <div class="body split">
+      <div>
+        <div class="quote"><p>“Clicking anywhere on the static background triggers the title audio to
+          re-play and overlap itself. Background clicks should not trigger or interrupt playback. The
+          title voice-over should play once automatically on load.”</p></div>
+        <h3>What caused it</h3>
+        <p>The same full-screen button as item 1. Its one and only authored action was “play my own
+          audio”, so every tap on the scenery threw the title line back to word one. That element is
+          no longer wired, and the line is now started once as the screen loads.</p>
+      </div>
+      <div>
+        <h3>Measured</h3>
+        <ul class="ev">
+          <li><span class="lbl">Triggers from 10 rapid taps on the scenery</span><span class="val"><span class="was">10</span><span class="arrow">→</span><span class="now">0</span></span></li>
+          <li><span class="lbl">Taps that cut into a line already speaking</span><span class="val"><span class="was">9</span><span class="arrow">→</span><span class="now">0</span></span></li>
+          <li><span class="lbl">Times the line starts on load</span><span class="val"><span class="now">1</span></span></li>
+          <li><span class="lbl">Welcome art hit-testing</span><span class="val"><span class="now">pointer-events: none</span></span></li>
+          <li><span class="lbl">Let's Go still stops the line and starts level 1</span><span class="val"><span class="now">pass</span></span></li>
+        </ul>
+        <figure style="margin-top:18px">
+          <div class="shot"><img alt="Welcome screen after ten taps on the scenery, overlaid green everywhere except the Let's Go button, with a band reporting zero audio triggers from those taps." src="shots/vo-taps.png" /></div>
+          <figcaption><b>Ten taps, zero audio.</b> Taps landed on the bookshelf, sky, wall, centre, title
+            and floor. The line was not started or interrupted once.</figcaption>
+        </figure>
+        <div class="note" style="margin-top:16px"><b>One platform caveat.</b> The page asks to play the
+          line the moment it loads. Browsers refuse an audible autoplay until the page has been
+          interacted with, and no page script can override that. Inside the app's web view it plays
+          automatically once
+          <code>mediaPlaybackRequiresUserGesture</code> is false (Android) or
+          <code>mediaTypesRequiringUserActionForPlayback</code> is empty (iOS). In a plain browser
+          tab the line instead starts on the learner's first touch — once, and it can never
+          re-trigger after that.</div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ================= 3 + 7 ================= -->
+  <article class="bug">
+    <header><span class="num">3 · 7</span><h2>Pointer stays on option cards after answering — wrong <em>and</em> right</h2><span class="pill ok">Closed</span></header>
+    <div class="body split">
+      <div>
+        <div class="quote"><p>“After selecting an incorrect answer, hovering the pink book and bag
+          options still shows a pointer. Only Try again should.”</p>
+          <p>“After selecting the correct answer, hovering both option cards still shows a pointer.
+            Only Next should.”</p></div>
+        <h3>What caused it</h3>
+        <p>Both were the inline-cursor problem from item 1, on a different screen. The cards were
+          genuinely locked the whole time — clicks were already being refused — but the cursor could
+          not be taken back off them. Fixing the cursor's owner closed both paths at once.</p>
+        <p>The cards also now <em>look</em> out of play: both dim, and the one the learner chose stays
+          bright so their eye lands on their own answer.</p>
+      </div>
+      <div>
+        <h3>Measured — on all four levels</h3>
+        <ul class="ev">
+          <li><span class="lbl">Cursor on the chosen card</span><span class="val"><span class="was">pointer</span><span class="arrow">→</span><span class="now">default</span></span></li>
+          <li><span class="lbl">Cursor on the other card</span><span class="val"><span class="was">pointer</span><span class="arrow">→</span><span class="now">default</span></span></li>
+          <li><span class="lbl">Answers submitted by clicking a completed card</span><span class="val"><span class="now">0</span></span></li>
+          <li><span class="lbl">Invariant across all 11 wired controls</span><span class="val"><span class="was">16 failures</span><span class="arrow">→</span><span class="now">0</span></span></li>
+          <li><span class="lbl">Only Next takes the pointer on the success screen</span><span class="val"><span class="now">pass</span></span></li>
+        </ul>
+        <p style="margin-top:14px;font-size:14.5px;color:var(--ink-soft)">Rather than checking screen
+          by screen, the suite asserts the rule itself on every control the game wires: switched off
+          must mean the arrow cursor, live must mean the hand. With that holding everywhere, no screen
+          can leak a pointer onto a locked control.</p>
+      </div>
+      <div class="shots two" style="grid-column:1/-1">
+        <figure>
+          <div class="shot"><img alt="The two option cards after a wrong answer, both overlaid green, with red only on the Try again button." src="shots/cards-wrong.png" /></div>
+          <figcaption><b>Item 3 — after a wrong answer.</b> Both cards green. Red survives on Try again alone.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img alt="The two option cards after the correct answer, both overlaid green, with red only on the Next button." src="shots/cards-right.png" /></div>
+          <figcaption><b>Item 7 — after the correct answer.</b> Both cards green. Red survives on Next alone.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </article>
+
+  <!-- ================= 4 5 8 ================= -->
+  <article class="bug">
+    <header><span class="num">4 · 5 · 8</span><h2>Buttons: flat, silent, and no response to hover or press</h2><span class="pill ok">Closed</span></header>
+    <div class="body">
+      <div class="quote"><p>“The Next button's colour does not change on hover. Interactive primary
+        buttons should shift shade to afford interactivity. Happens for all buttons.”</p>
+        <p>“Make Next and Check bumpy and tappable — two states, and a dark tone when tapped. Remove
+          the shine and the white flash. Add a tap sound across the whole game.”</p></div>
+      <figure>
+        <div class="shot"><img alt="Six rows comparing the Next and Check buttons: the original flat pill, then resting on a bump, hovered in a darker blue, pressed and sunk, switched off in grey, and the Check button in the same treatment." src="shots/button-states.png" /></div>
+        <figcaption><b>One sprite in every row.</b> No artwork was redrawn — the bump, the shades and
+          the travel are all styling over the original art, so nothing needs re-exporting.</figcaption>
+      </figure>
+      <div class="body split" style="padding:0">
+        <div>
+          <h3>How it behaves now</h3>
+          <ul class="ev">
+            <li><span class="lbl">Resting</span><span class="val"><span class="now">8px bump</span></span></li>
+            <li><span class="lbl">Hovered (mouse only)</span><span class="val"><span class="now">darker blue, rises 2px</span></span></li>
+            <li><span class="lbl">Pressed</span><span class="val"><span class="now">travels 8px down, dark tone</span></span></li>
+            <li><span class="lbl">Switched off</span><span class="val"><span class="now">grey, sunk</span></span></li>
+            <li><span class="lbl">Shine sweep / white flash</span><span class="val"><span class="now">removed</span></span></li>
+          </ul>
+        </div>
+        <div>
+          <h3>Measured</h3>
+          <ul class="ev">
+            <li><span class="lbl">Buttons that play a tap sound, per level</span><span class="val"><span class="now">9 of 9</span></span></li>
+            <li><span class="lbl">Sounds per tap (was double on two buttons)</span><span class="val"><span class="was">2</span><span class="arrow">→</span><span class="now">1</span></span></li>
+            <li><span class="lbl">Sound from a switched-off button</span><span class="val"><span class="now">0</span></span></li>
+            <li><span class="lbl">Press travel</span><span class="val"><span class="was">0</span><span class="arrow">→</span><span class="now">8px</span></span></li>
+            <li><span class="lbl">Hover shade</span><span class="val"><span class="was">1.00</span><span class="arrow">→</span><span class="now">0.93</span></span></li>
+            <li><span class="lbl">Flash elements spawned on tap</span><span class="val"><span class="now">0</span></span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="note"><b>Hover is deliberately mouse-only.</b> On a touch screen the hover state
+        latches after a tap and would stay lit until something else was touched. It is gated to real
+        pointing devices, so tablets never see it.</div>
+    </div>
+  </article>
+
+  <!-- ================= 6 ================= -->
+  <article class="bug">
+    <header><span class="num">6</span><h2>Try again appears out of nowhere on the block stage</h2><span class="pill ok">Closed</span></header>
+    <div class="body split">
+      <div>
+        <div class="quote"><p>“The Try again button looks like it appears suddenly and it does not look
+          like the learner got it wrong. Add a shake or something, and let the button appear along
+          with the voice-over.”</p></div>
+        <h3>What happens now</h3>
+        <p>Pressing Check with the wrong number of blocks used to drop the button on screen in the
+          same instant, with its audio starting underneath it — so the button read as though it had
+          always been there and nothing marked the mistake.</p>
+        <p>The stage now reacts in order: the controls go out of play, the pan of blocks shakes its
+          head while the blocks turn red, and only then does Try again pop in, arriving with the
+          words. No new narration was added — this is the stage's own line.</p>
+      </div>
+      <div>
+        <h3>Measured — on all four levels</h3>
+        <ul class="ev">
+          <li><span class="lbl">Controls locked when the answer is wrong</span><span class="val"><span class="now">immediately</span></span></li>
+          <li><span class="lbl">Try again on screen at 90ms</span><span class="val"><span class="was">yes</span><span class="arrow">→</span><span class="now">no</span></span></li>
+          <li><span class="lbl">When Try again arrives</span><span class="val"><span class="was">0ms</span><span class="arrow">→</span><span class="now">660ms</span></span></li>
+          <li><span class="lbl">Pan shakes</span><span class="val"><span class="now">translateX 15px</span></span></li>
+          <li><span class="lbl">Pan returned to its exact starting position</span><span class="val"><span class="now">pass</span></span></li>
+          <li><span class="lbl">Clips played</span><span class="val"><span class="now">Try_again.ogg only</span></span></li>
+        </ul>
+      </div>
+      <div class="shots two" style="grid-column:1/-1">
+        <figure>
+          <div class="shot"><img alt="The block stage moments after a wrong count: the pan is shaken sideways, plus minus and Check are green meaning locked, and no Try again button is on screen." src="shots/block-locked.png" /></div>
+          <figcaption><b>At 170ms.</b> Pan shifted <code>translateX(15px)</code> mid-shake, +, − and Check
+            already locked and green, and no Try again anywhere — pointer surface <b>0.0%</b>.</figcaption>
+        </figure>
+        <figure>
+          <div class="shot"><img alt="The same block stage a moment later: Try again has appeared and is the only red region, while plus and minus remain green." src="shots/block-reveal.png" /></div>
+          <figcaption><b>At 770ms.</b> Try again has arrived with its line and is the only red region.
+            The pan is back on its original transform; the controls are still locked.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </article>
+
+  <!-- ================= 9 ================= -->
+  <article class="bug">
+    <header><span class="num">9</span><h2>Tapping a locked card flashes a blue highlight</h2><span class="pill ok">Closed</span></header>
+    <div class="body split">
+      <div>
+        <div class="quote"><p>“On the post-answer screen, tapping the unselected card triggers a blue
+          selection outline. The cards are disabled — tapping should produce no visual change at
+          all.”</p></div>
+        <h3>What caused it</h3>
+        <p>Not the game. A wired control stays a tap target even while it is switched off, so mobile
+          browsers painted <em>their own</em> translucent blue rectangle over the card the moment a
+          finger landed — before any game code ran, and regardless of the check that correctly
+          refused the tap. That is why the highlight appeared while nothing happened, and why it only
+          showed on touch devices. The platform highlight is now suppressed across the game.</p>
+      </div>
+      <div>
+        <h3>Measured — on all four levels</h3>
+        <ul class="ev">
+          <li><span class="lbl">Platform tap highlight on the cards</span><span class="val"><span class="now">transparent</span></span></li>
+          <li><span class="lbl">Visual properties watched across 3 taps</span><span class="val"><span class="now">15, none changed</span></span></li>
+          <li><span class="lbl">Still identical 400ms later</span><span class="val"><span class="now">pass</span></span></li>
+          <li><span class="lbl">Pressed styling on a locked card</span><span class="val"><span class="now">never applied</span></span></li>
+          <li><span class="lbl">A live control still reacts to a press</span><span class="val"><span class="now">pass</span></span></li>
+        </ul>
+        <p style="margin-top:14px;font-size:14.5px;color:var(--ink-soft)">That last line matters: the
+          browser's overlay is gone without switching off the game's own press feedback.</p>
+      </div>
+      <figure style="grid-column:1/-1">
+        <div class="shot"><img alt="The post-answer screen after tapping the locked card three times, with a band reporting that none of eleven watched properties changed and the platform tap highlight is transparent." src="shots/tap-locked.png" /></div>
+        <figcaption><b>Three taps on the locked card, nothing moved.</b> Every watched property — tap
+          highlight, outline, border, box-shadow, filter, opacity, background, transform, margin and the
+          class list — is identical before and after.</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <!-- ================= 10 ================= -->
+  <article class="bug">
+    <header><span class="num">10</span><h2>Nothing nudges the learner toward Next when idle</h2><span class="pill hold">Visual done · audio needs a clip</span></header>
+    <div class="body split">
+      <div>
+        <div class="quote"><p>“Once the slide audio finishes, the screen goes static. After about five
+          seconds idle, something should nudge the learner — a pulse or animation on Next, or an
+          audio reminder.”</p></div>
+        <h3>What caused it</h3>
+        <p>The game already had the machinery — a timer that drops an animated pointing hand onto a
+          target — but of the four places that reveal Next, only one armed it, and the
+          “That is correct!” screen was not one of them.</p>
+        <p>All four now arm the same escalation: Next pops in and breathes; if it is still untouched
+          after five seconds the breathing deepens and the hand comes in and points at it. Both stop
+          the instant it is pressed.</p>
+      </div>
+      <div>
+        <h3>Measured — on all four levels</h3>
+        <ul class="ev">
+          <li><span class="lbl">Reveal sites that nudge</span><span class="val"><span class="was">1 of 4</span><span class="arrow">→</span><span class="now">4 of 4</span></span></li>
+          <li><span class="lbl">Hand appears after</span><span class="val"><span class="now">4 340ms</span></span></li>
+          <li><span class="lbl">Hand is parented to the Next button</span><span class="val"><span class="now">pass</span></span></li>
+          <li><span class="lbl">Breathing deepens</span><span class="val"><span class="now">0.94–1.00 → 0.88–1.06</span></span></li>
+          <li><span class="lbl">Both stop when Next is pressed</span><span class="val"><span class="now">pass</span></span></li>
+          <li><span class="lbl">Nudge fires on a button that already left</span><span class="val"><span class="now">never</span></span></li>
+        </ul>
+        <div class="note" style="margin-top:16px"><b>The audio reminder is not built.</b> There is no
+          “click Next to continue” clip in the project — the closest is
+          <code>Tap_on_the_heavier_item.ogg</code>, which belongs to a different stage and would be
+          wrong here. Rather than repurpose an unrelated line, the visual nudge ships on its own.
+          Supply a clip and it drops into one place.</div>
+      </div>
+      <figure style="grid-column:1/-1">
+        <div class="shot"><img alt="The Next button with the animated pointing hand sitting on it after five seconds idle, and a band reporting the hand appeared at 4340 milliseconds." src="shots/idle-nudge.png" /></div>
+        <figcaption><b>The nudge, five seconds in.</b> The pointing hand has arrived on Next and the
+          breathing has deepened. Both stop the instant the button is pressed.</figcaption>
+      </figure>
+    </div>
+  </article>
+
+  <section class="open">
+    <h2 style="font-size:25px;margin-bottom:6px">Open, and worth a decision</h2>
+    <p style="color:var(--ink-soft)">Three things left on the table. None blocks the build.</p>
+    <div class="openlist">
+      <div class="openitem">
+        <h3>Idle audio reminder — needs a recording</h3>
+        <p>Item 10's visual nudge is live. The spoken reminder needs a clip that does not exist yet.
+          One line of wiring once it does.</p>
+      </div>
+      <div class="openitem">
+        <h3>Automatic title voice-over — needs one app-side flag</h3>
+        <p>The page already asks to play the line on load. Whether it is allowed is decided by the
+          host, not by the page. Setting the web view's gesture requirement to false makes it
+          automatic everywhere, with no change to the game.</p>
+      </div>
+      <div class="openitem">
+        <h3>The five-second idle threshold covers Next only</h3>
+        <p>Plus and minus were already at five seconds. Check, Try again, “Select a balance” and the
+          final tap still use their authored twelve. Those are moments where a learner is reading or
+          thinking rather than stuck, which is likely why they were set longer — say the word and
+          they change.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule" />
+  <p class="foot">Figures come from ten automated suites run headless over all four levels against the
+    shipped build. Four checks are recorded as skipped rather than passed: they wait on narration that
+    cannot finish on a machine with no audio device, and are never counted as passes.</p>
+
+</div>
+
+</body>
+</html>
