@@ -253,6 +253,38 @@
 
   <hr class="rule" />
 
+  <section style="margin-bottom:44px">
+    <h2 style="font-size:25px;margin-bottom:6px">Every screen in the game, measured</h2>
+    <p style="color:var(--ink-soft);max-width:66ch">Before the individual items, here is the whole
+      journey with the cursor overlay on each screen. The rule being checked is the same everywhere:
+      <b>green across the scenery, red only on what the learner is meant to press.</b> These are the
+      screens QA's own repro steps start from.</p>
+    <div class="shots two" style="margin-top:20px">
+      <figure>
+        <div class="shot"><img alt="The selection screen with both balance cards tinted red, meaning they are the only pointer targets, and the rest of the screen green." src="shots/select-live.png" /></div>
+        <figcaption><b>1 · Selection.</b> “Select a balance.” Both cards live; nothing else is a
+          pointer target.</figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img alt="The block-building stage: the plus button is red and live, the minus button is green because the count is at its floor, and Check is wired." src="shots/block-live.png" /></div>
+        <figcaption><b>2 · Building the answer.</b> <code>+</code> live, <code>−</code> correctly
+          switched off with the count at its floor — the light/dark states doing their job.</figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img alt="The quiz screen showing the book and the pencil box, both cards tinted red as live pointer targets." src="shots/quiz-live.png" /></div>
+        <figcaption><b>3 · The quiz.</b> “Tap the heavier item.” Both answer cards live —
+          <code>cursor:pointer interactable:1</code>. This is the screen QA's steps begin on.</figcaption>
+      </figure>
+      <figure>
+        <div class="shot"><img alt="The finish screen at the end of the last level, with no pointer regions over the scenery." src="shots/gameover.png" /></div>
+        <figcaption><b>4 · Finish.</b> End of the last level. No pointer leaks anywhere on the
+          celebration screen.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <hr class="rule" />
+
   <!-- ================= 1 ================= -->
   <article class="bug">
     <header><span class="num">1</span><h2>Pointer cursor over non-interactive welcome-screen areas</h2><span class="pill ok">Closed</span></header>
